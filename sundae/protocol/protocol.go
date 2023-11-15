@@ -4,50 +4,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/SundaeSwap-finance/apollo/constants"
 	"github.com/SundaeSwap-finance/apollo/serialization/Address"
-)
-
-type SundaeVersion uint8
-
-const (
-	SundaeV1 SundaeVersion = iota
-	SundaeV3
-)
-
-func (o *SundaeVersion) UnmarshalJSON(data []byte) error {
-	var val string
-	err := json.Unmarshal(data, &val)
-	if err != nil {
-		return fmt.Errorf("Couldn't unmarshal SundaeVersion: %w", err)
-	}
-	if val == "v1" {
-		*o = SundaeV1
-	} else if val == "v3" {
-		*o = SundaeV3
-	} else {
-		return fmt.Errorf("Couldn't unmarshal SundaeVersion from string: %s", val)
-	}
-	return nil
-}
-
-func FormatSundaeVersion(v SundaeVersion) string {
-	switch v {
-	case SundaeV1:
-		return "v1"
-	case SundaeV3:
-		return "v3"
-	default:
-		return ""
-	}
-}
-
-type ObjectType uint8
-
-const (
-	EscrowObject ObjectType = iota
-	PoolObject
-	FactoryObject
-	NoObject
 )
 
 type TxIn struct {
@@ -75,25 +33,149 @@ func (t *TxIn) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-type Protocol struct {
-	Version         SundaeVersion
-	EscrowAddr      string
-	PoolAddr        string
-	FactoryAddr     string
-	LicensePolicyID string
-	PoolPolicyID    string
-	StakeAddr       string
-	StakeValidator  string
-	ScooperSkey     string
-	ScooperVkey     string
-	References      []TxIn
+type Validator struct {
+	Title        string
+	CompiledCode []byte
+	Hash         []byte
 }
 
-func (p *Protocol) PoolNFT(poolIdent string) (string, error) {
-	addr, err := Address.DecodeAddress(p.PoolAddr)
-	if err != nil {
-		return "", err
+func (v *Validator) UnmarshalJSON(data []byte) error {
+	var s struct {
+		Title        string
+		CompiledCode string
+		Hash         string
 	}
-	poolScriptHash := hex.EncodeToString(addr.PaymentPart)
-	return poolScriptHash + ".70" + poolIdent, nil
+	err := json.Unmarshal(data, &s)
+	if err != nil {
+		return err
+	}
+	code := s.CompiledCode
+	hash := s.Hash
+	codeBytes, err := hex.DecodeString(code)
+	if err != nil {
+		return err
+	}
+	hashBytes, err := hex.DecodeString(hash)
+	if err != nil {
+		return err
+	}
+	v.Title = s.Title
+	v.CompiledCode = codeBytes
+	v.Hash = hashBytes
+	return nil
+}
+
+type Blueprint struct {
+	Validators []Validator
+}
+
+type Protocol struct {
+	Version     string
+	Environment string
+	Blueprint   Blueprint
+	References  map[string]TxIn
+	Network     string
+}
+
+type protocolDefinition struct {
+	Version      string
+	Environment  string
+	BlueprintUrl string
+	Blueprint    Blueprint
+	References   map[string]TxIn
+	Network      string
+}
+
+func DecodeJSON(data []byte, fetchUrl func(url string) ([]byte, error)) (*Protocol, error) {
+	var p Protocol
+	var protocolDefinition protocolDefinition
+	if err := json.Unmarshal(data, &protocolDefinition); err != nil {
+		return nil, fmt.Errorf("DecodeJSON: Unmarshal: %v", err)
+	}
+	p.Version = protocolDefinition.Version
+	p.Environment = protocolDefinition.Environment
+	if protocolDefinition.BlueprintUrl != "" {
+		var blueprintFromUrl Blueprint
+		if fetchUrl == nil {
+			return nil, fmt.Errorf("No function provided to fetch blueprint from url %s", protocolDefinition.BlueprintUrl)
+		}
+		blueprintBytes, err := fetchUrl(protocolDefinition.BlueprintUrl)
+		if err != nil {
+			return nil, fmt.Errorf("DecodeJSON: %v", err)
+		}
+		if err := json.Unmarshal(blueprintBytes, blueprintFromUrl); err != nil {
+			return nil, fmt.Errorf("DecodeJSON: %v", err)
+		}
+		p.Blueprint = blueprintFromUrl
+	} else {
+		p.Blueprint = protocolDefinition.Blueprint
+	}
+	p.References = protocolDefinition.References
+	p.Network = protocolDefinition.Network
+	return &p, nil
+}
+
+const OrderScriptKey = "order.spend"
+const PoolScriptKey = "pool.spend"
+const SettingsScriptKey = "settings.spend"
+const StakeScriptKey = "stake.stake"
+
+func (p *Protocol) getAddress(key string, addressType byte) (*Address.Address, error) {
+	var network constants.Network
+	if p.Network == "mainnet" {
+		network = constants.MAINNET
+	} else {
+		network = constants.TESTNET
+	}
+	for _, v := range p.Blueprint.Validators {
+		if v.Title == key {
+			addr, err := Address.AddressFromBytes(v.Hash, nil, network, addressType)
+			if err != nil {
+				return nil, fmt.Errorf("Couldn't create address from '%s' script hash: %v", key, v.Hash)
+			}
+			return addr, nil
+		}
+	}
+	return nil, fmt.Errorf("Couldn't find '%s' script in the blueprint", key)
+}
+
+func (p *Protocol) GetOrderAddress() (*Address.Address, error) {
+	return p.getAddress(OrderScriptKey, Address.SCRIPT_NONE)
+}
+
+func (p *Protocol) GetPoolAddress() (*Address.Address, error) {
+	return p.getAddress(PoolScriptKey, Address.SCRIPT_NONE)
+}
+
+func (p *Protocol) GetSettingsAddress() (*Address.Address, error) {
+	return p.getAddress(SettingsScriptKey, Address.SCRIPT_NONE)
+}
+
+func (p *Protocol) GetStakeAddress() (*Address.Address, error) {
+	return p.getAddress(StakeScriptKey, Address.NONE_SCRIPT)
+}
+
+func (p *Protocol) getScript(key string) ([]byte, error) {
+	for _, v := range p.Blueprint.Validators {
+		if v.Title == key {
+			return v.CompiledCode, nil
+		}
+	}
+	return nil, fmt.Errorf("Couldn't find '%s' script in the blueprint", key)
+}
+
+func (p *Protocol) GetOrderScript() ([]byte, error) {
+	return p.getScript(OrderScriptKey)
+}
+
+func (p *Protocol) GetPoolScript() ([]byte, error) {
+	return p.getScript(PoolScriptKey)
+}
+
+func (p *Protocol) GetSettingsScript() ([]byte, error) {
+	return p.getScript(SettingsScriptKey)
+}
+
+func (p *Protocol) GetStakeScript() ([]byte, error) {
+	return p.getScript(StakeScriptKey)
 }
