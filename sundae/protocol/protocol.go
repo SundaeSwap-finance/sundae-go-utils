@@ -4,8 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/SundaeSwap-finance/apollo/constants"
-	"github.com/SundaeSwap-finance/apollo/serialization/Address"
 )
 
 type TxIn struct {
@@ -82,41 +80,6 @@ const OrderScriptKey = "order.spend"
 const PoolScriptKey = "pool.spend"
 const SettingsScriptKey = "settings.spend"
 const StakeScriptKey = "stake.stake"
-
-func (p *Protocol) getAddress(key string, addressType byte) (*Address.Address, error) {
-	var network constants.Network
-	if p.Network == "mainnet" {
-		network = constants.MAINNET
-	} else {
-		network = constants.TESTNET
-	}
-	for _, v := range p.Blueprint.Validators {
-		if v.Title == key {
-			addr, err := Address.AddressFromBytes(v.Hash, nil, network, addressType)
-			if err != nil {
-				return nil, fmt.Errorf("Couldn't create address from '%s' script hash: %v", key, v.Hash)
-			}
-			return addr, nil
-		}
-	}
-	return nil, fmt.Errorf("Couldn't find '%s' script in the blueprint", key)
-}
-
-func (p *Protocol) GetOrderAddress() (*Address.Address, error) {
-	return p.getAddress(OrderScriptKey, Address.SCRIPT_NONE)
-}
-
-func (p *Protocol) GetPoolAddress() (*Address.Address, error) {
-	return p.getAddress(PoolScriptKey, Address.SCRIPT_NONE)
-}
-
-func (p *Protocol) GetSettingsAddress() (*Address.Address, error) {
-	return p.getAddress(SettingsScriptKey, Address.SCRIPT_NONE)
-}
-
-func (p *Protocol) GetStakeAddress() (*Address.Address, error) {
-	return p.getAddress(StakeScriptKey, Address.NONE_SCRIPT)
-}
 
 func (p *Protocol) getScript(key string) ([]byte, error) {
 	for _, v := range p.Blueprint.Validators {
