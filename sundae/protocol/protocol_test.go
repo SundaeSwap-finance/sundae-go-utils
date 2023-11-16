@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 )
@@ -28,7 +29,8 @@ func Test_DecodeProtocol(t *testing.T) {
             "Network": "testnet"
           }
         `)
-	protocol, err := DecodeJSON(protocolBytes, nil)
+	var protocol Protocol
+	err := json.Unmarshal(protocolBytes, &protocol)
 	if err != nil {
 		t.Errorf("Failed to decode json: %v", err)
 	}
@@ -44,11 +46,11 @@ func Test_DecodeProtocol(t *testing.T) {
 	if !reflect.DeepEqual(protocol.Blueprint.Validators[0].CompiledCode, []byte{0, 0, 0}) {
 		t.Errorf("Incorrect blueprint validator 0 code: %x", protocol.Blueprint.Validators[0].CompiledCode)
 	}
-        orderAddress, err := protocol.GetOrderAddress()
-        if err != nil {
-                t.Errorf("Failed to get order address: %v", err)
-        }
-        if orderAddress.String() != "addr_test1wpl692dzgmrys4e3dqusv54kr2l2utw8vxnxud37x7etz7gdry39s" {
-                t.Errorf("Incorrect order address: %s", orderAddress.String())
-        }
+	orderAddress, err := protocol.GetOrderAddress()
+	if err != nil {
+		t.Errorf("Failed to get order address: %v", err)
+	}
+	if orderAddress.String() != "addr_test1wpl692dzgmrys4e3dqusv54kr2l2utw8vxnxud37x7etz7gdry39s" {
+		t.Errorf("Incorrect order address: %s", orderAddress.String())
+	}
 }

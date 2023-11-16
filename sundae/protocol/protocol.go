@@ -70,49 +70,12 @@ type Blueprint struct {
 }
 
 type Protocol struct {
-	Version     string
-	Environment string
-	Blueprint   Blueprint
-	References  map[string]TxIn
-	Network     string
-}
-
-type protocolDefinition struct {
 	Version      string
 	Environment  string
-	BlueprintUrl string
 	Blueprint    Blueprint
+	BlueprintUrl string
 	References   map[string]TxIn
 	Network      string
-}
-
-func DecodeJSON(data []byte, fetchUrl func(url string) ([]byte, error)) (*Protocol, error) {
-	var p Protocol
-	var protocolDefinition protocolDefinition
-	if err := json.Unmarshal(data, &protocolDefinition); err != nil {
-		return nil, fmt.Errorf("DecodeJSON: Unmarshal: %v", err)
-	}
-	p.Version = protocolDefinition.Version
-	p.Environment = protocolDefinition.Environment
-	if protocolDefinition.BlueprintUrl != "" {
-		var blueprintFromUrl Blueprint
-		if fetchUrl == nil {
-			return nil, fmt.Errorf("No function provided to fetch blueprint from url %s", protocolDefinition.BlueprintUrl)
-		}
-		blueprintBytes, err := fetchUrl(protocolDefinition.BlueprintUrl)
-		if err != nil {
-			return nil, fmt.Errorf("DecodeJSON: %v", err)
-		}
-		if err := json.Unmarshal(blueprintBytes, blueprintFromUrl); err != nil {
-			return nil, fmt.Errorf("DecodeJSON: %v", err)
-		}
-		p.Blueprint = blueprintFromUrl
-	} else {
-		p.Blueprint = protocolDefinition.Blueprint
-	}
-	p.References = protocolDefinition.References
-	p.Network = protocolDefinition.Network
-	return &p, nil
 }
 
 const OrderScriptKey = "order.spend"
