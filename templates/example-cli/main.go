@@ -1,16 +1,20 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
 	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
-	sundaegql "github.com/SundaeSwap-finance/sundae-go-utils/sundae-gql"
 	"github.com/urfave/cli/v2"
 )
 
+var opts struct {
+	Suffix string
+}
+
 var service = sundaecli.Service{
-	Name:    "example-api",
+	Name:    "example-cli",
 	Version: sundaecli.CommitHash(),
 }
 
@@ -21,6 +25,14 @@ func main() {
 		append(
 			sundaecli.CommonFlags,
 			sundaecli.PortFlag(5001),
+			&cli.StringFlag{
+				Name:        "suffix",
+				Usage:       "suffix to append to the greeting",
+				Value:       "world",
+				Required:    false,
+				EnvVars:     []string{"SUFFIX"},
+				Destination: &opts.Suffix,
+			},
 		)...,
 	)
 	err := app.Run(os.Args)
@@ -30,5 +42,6 @@ func main() {
 }
 
 func action(ctx *cli.Context) error {
-	return sundaegql.Webserver(&Resolver{})
+	fmt.Printf("Hello, %v!\n", opts.Suffix)
+	return nil
 }
