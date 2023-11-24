@@ -2,6 +2,10 @@
 
 A bunch of common boilerplate used across Sundae services
 
+## templates
+
+Several templates for common styles of go binaries we write, for easily spinning up new instances
+
 ## cardano
 
 Some utilities for working with Cardano, such as slot translation, address parsing, etc.
