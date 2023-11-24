@@ -1,4 +1,4 @@
-package sundaegql
+package sundaecli
 
 type Service struct {
 	Name    string

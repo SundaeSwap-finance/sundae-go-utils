@@ -1,8 +1,11 @@
 package sundaegql
 
-import "github.com/rs/zerolog"
+import (
+	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
+	"github.com/rs/zerolog"
+)
 
 type BaseConfig struct {
 	Logger  zerolog.Logger
-	Service Service
+	Service sundaecli.Service
 }
