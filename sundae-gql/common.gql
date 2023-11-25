@@ -20,6 +20,9 @@ scalar JSON
 """ A big integer, serialized as a string """
 scalar BigInteger
 
+""" A unitless rational number, serialized as an array of numerator and denominator """
+scalar Fraction
+
 """ The protocol version tag we're working with """
 enum Version {
     V1
