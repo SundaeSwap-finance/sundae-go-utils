@@ -5,3 +5,10 @@ type Service struct {
 	Version string
 	Schema  string
 }
+
+func NewService(name string) Service {
+	return Service{
+		Name:    name,
+		Version: CommitHash(),
+	}
+}

@@ -20,6 +20,7 @@ func App(service Service, action cli.ActionFunc, flags ...cli.Flag) *cli.App {
 
 func CommitHash() string {
 	if info, ok := debug.ReadBuildInfo(); ok {
+		fmt.Printf("%v\n", info)
 		for _, setting := range info.Settings {
 			if setting.Key == "vcs.revision" {
 				return setting.Value
