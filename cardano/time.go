@@ -15,8 +15,9 @@ func (d DateTime) Unix() int64 {
 	return d.Instant.Unix()
 }
 
-func (d DateTime) Slot() (uint64, error) {
-	return TimeToSlotEnv(d.Instant, "")
+func (d DateTime) Slot() (int32, error) {
+	s, err := TimeToSlotEnv(d.Instant, "")
+	return int32(s), err
 }
 
 func (d DateTime) Format(args struct{ Layout string }) string {
