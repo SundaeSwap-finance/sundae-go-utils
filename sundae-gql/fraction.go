@@ -1,4 +1,4 @@
-package sundaeapi
+package sundaegql
 
 import (
 	"encoding/json"
