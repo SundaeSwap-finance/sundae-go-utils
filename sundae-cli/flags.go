@@ -3,9 +3,10 @@ package sundaecli
 import "github.com/urfave/cli/v2"
 
 var CommonOpts struct {
-	Console bool
-	Env     string
-	Port    int
+	Console    bool
+	Env        string
+	SlotOffset uint64
+	Port       int
 }
 
 var ConsoleFlag = cli.BoolFlag{
@@ -22,6 +23,13 @@ var EnvFlag = cli.StringFlag{
 	EnvVars:     []string{"ENV"},
 	Destination: &CommonOpts.Env,
 }
+var SlotOffset = cli.Uint64Flag{
+	Name:        "slot-offset",
+	Usage:       "the environment offset between slots and unix time",
+	Value:       0,
+	EnvVars:     []string{"SLOT_OFFSET"},
+	Destination: &CommonOpts.SlotOffset,
+}
 var PortFlag = func(p int) *cli.IntFlag {
 	return &cli.IntFlag{
 		Name:        "port",
@@ -35,4 +43,5 @@ var PortFlag = func(p int) *cli.IntFlag {
 var CommonFlags = []cli.Flag{
 	&ConsoleFlag,
 	&EnvFlag,
+	&SlotOffset,
 }

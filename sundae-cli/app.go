@@ -25,6 +25,7 @@ func CommitHash() string {
 				return setting.Value
 			}
 		}
+		return info.Main.Version
 	}
-	return ""
+	return "unknown"
 }
