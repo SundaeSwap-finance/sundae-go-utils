@@ -15,3 +15,10 @@ var Common = SchemaPart{
 	Label:  "Common Types",
 	Schema: CommonSchema,
 }
+
+func MergeSchemas(base string, schemas ...SchemaPart) string {
+	for _, part := range schemas {
+		base += "\n\n# " + part.Label + "\n\n" + part.Schema
+	}
+	return base
+}

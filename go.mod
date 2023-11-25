@@ -13,8 +13,12 @@ require (
 	golang.org/x/sys v0.12.0 // indirect
 )
 
+require github.com/SundaeSwap-finance/ogmigo v0.8.1
+
 require (
+	github.com/aws/aws-sdk-go v1.44.197 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect

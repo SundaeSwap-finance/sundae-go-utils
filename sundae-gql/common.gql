@@ -1,18 +1,21 @@
-# A federated bramble service
+""" A federated bramble service """
 type Service {
-    # The name of the service
+    """ The name of the service """
     name: String!
-    # The version (such as a commit hash) of the service
+    """ The version (such as a commit hash) of the service """
     version: String!
-    # The full schema this service provides
+    """ The full schema this service provides """
     schema: String!
 }
 
-# A specific moment in time
+""" A specific moment in time """
 type DateTime {
     slot: Int!
     format(layout: String = "2006-01-02T15:04:05Z"): String!
 }
 
-# An arbitrary block of JSON
+""" An arbitrary block of JSON """
 scalar JSON
+
+""" A big integer, serialized as a string """
+scalar BigInteger
