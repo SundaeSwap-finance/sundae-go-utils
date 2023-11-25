@@ -20,6 +20,8 @@ func (d DateTime) Slot() (int32, error) {
 	return int32(s), err
 }
 
+const DefaultLayout = "2006-01-02T15:04:05Z"
+
 func (d DateTime) Format(args struct{ Layout string }) string {
 	return d.Instant.Format(args.Layout)
 }

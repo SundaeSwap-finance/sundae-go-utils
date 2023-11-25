@@ -19,3 +19,9 @@ scalar JSON
 
 """ A big integer, serialized as a string """
 scalar BigInteger
+
+""" The protocol version tag we're working with """
+enum Version {
+    V1
+    V3
+}
