@@ -75,7 +75,7 @@ func parseBytes(path string, v interface{}) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("path: %v: unable to parse '%v' as bytes", path, v)
 	}
-	if result[0:2] == "0x" {
+	if len(result) >= 2 && result[0:2] == "0x" {
 		result = result[2:]
 	}
 
