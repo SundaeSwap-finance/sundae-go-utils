@@ -24,14 +24,7 @@ func main() {
 		action,
 		append(
 			sundaecli.CommonFlags,
-			&cli.StringFlag{
-				Name:        "suffix",
-				Usage:       "suffix to append to the greeting",
-				Value:       "world",
-				Required:    false,
-				EnvVars:     []string{"SUFFIX"},
-				Destination: &opts.Suffix,
-			},
+			sundaecli.StringFlag("suffix", "suffix to append to the greeting", &opts.Suffix, "world"),
 		)...,
 	)
 	err := app.Run(os.Args)

@@ -1,6 +1,10 @@
 package sundaecli
 
-import "github.com/urfave/cli/v2"
+import (
+	"strings"
+
+	"github.com/urfave/cli/v2"
+)
 
 var CommonOpts struct {
 	Console    bool
@@ -10,34 +14,10 @@ var CommonOpts struct {
 	Port       int
 }
 
-var ConsoleFlag = cli.BoolFlag{
-	Name:        "console",
-	Usage:       "whether to run in console mode or lambda mode",
-	Value:       false,
-	EnvVars:     []string{"CONSOLE"},
-	Destination: &CommonOpts.Console,
-}
-var DryFlag = cli.BoolFlag{
-	Name:        "dry",
-	Usage:       "whether to actually persist any records or not",
-	Value:       false,
-	EnvVars:     []string{"DRY"},
-	Destination: &CommonOpts.Dry,
-}
-var EnvFlag = cli.StringFlag{
-	Name:        "env",
-	Usage:       "environment",
-	Value:       "local",
-	EnvVars:     []string{"ENV"},
-	Destination: &CommonOpts.Env,
-}
-var SlotOffset = cli.Uint64Flag{
-	Name:        "slot-offset",
-	Usage:       "the environment offset between slots and unix time",
-	Value:       0,
-	EnvVars:     []string{"SLOT_OFFSET"},
-	Destination: &CommonOpts.SlotOffset,
-}
+var ConsoleFlag = BoolFlag("console", "whether to run in console mode or lambda mode", &CommonOpts.Console)
+var DryFlag = BoolFlag("dry", "whether to actually persist any records or not", &CommonOpts.Dry)
+var EnvFlag = StringFlag("env", "the deployment environment / cardano network", &CommonOpts.Env)
+var SlotOffset = Uint64Flag("slot-offset", "the offset for this environment between slots and unix time", &CommonOpts.SlotOffset)
 var PortFlag = func(p int) *cli.IntFlag {
 	return &cli.IntFlag{
 		Name:        "port",
@@ -49,8 +29,68 @@ var PortFlag = func(p int) *cli.IntFlag {
 }
 
 var CommonFlags = []cli.Flag{
-	&ConsoleFlag,
-	&DryFlag,
-	&EnvFlag,
-	&SlotOffset,
+	ConsoleFlag,
+	DryFlag,
+	EnvFlag,
+	SlotOffset,
+}
+
+func ToUNDER_CAPS(s string) string {
+	return strings.ToUpper(strings.Replace(s, "-", "_", -1))
+}
+
+func StringFlag(name, usage string, dest *string, value ...string) *cli.StringFlag {
+	var v string
+	if len(value) > 0 {
+		v = value[0]
+	}
+	return &cli.StringFlag{
+		Name:        name,
+		Usage:       usage,
+		Value:       v,
+		EnvVars:     []string{ToUNDER_CAPS(name)},
+		Destination: dest,
+	}
+}
+
+func IntFlag(name, usage string, dest *int, value ...int) *cli.IntFlag {
+	var v int
+	if len(value) > 0 {
+		v = value[0]
+	}
+	return &cli.IntFlag{
+		Name:        name,
+		Usage:       usage,
+		Value:       v,
+		EnvVars:     []string{ToUNDER_CAPS(name)},
+		Destination: dest,
+	}
+}
+
+func BoolFlag(name, usage string, dest *bool, value ...bool) *cli.BoolFlag {
+	var v bool
+	if len(value) > 0 {
+		v = value[0]
+	}
+	return &cli.BoolFlag{
+		Name:        name,
+		Usage:       usage,
+		Value:       v,
+		EnvVars:     []string{ToUNDER_CAPS(name)},
+		Destination: dest,
+	}
+}
+
+func Uint64Flag(name, usage string, dest *uint64, value ...uint64) *cli.Uint64Flag {
+	var v uint64
+	if len(value) > 0 {
+		v = value[0]
+	}
+	return &cli.Uint64Flag{
+		Name:        name,
+		Usage:       usage,
+		Value:       v,
+		EnvVars:     []string{ToUNDER_CAPS(name)},
+		Destination: dest,
+	}
 }
