@@ -4,6 +4,7 @@ import "github.com/urfave/cli/v2"
 
 var CommonOpts struct {
 	Console    bool
+	Dry        bool
 	Env        string
 	SlotOffset uint64
 	Port       int
@@ -15,6 +16,13 @@ var ConsoleFlag = cli.BoolFlag{
 	Value:       false,
 	EnvVars:     []string{"CONSOLE"},
 	Destination: &CommonOpts.Console,
+}
+var DryFlag = cli.BoolFlag{
+	Name:        "dry",
+	Usage:       "whether to actually persist any records or not",
+	Value:       false,
+	EnvVars:     []string{"DRY"},
+	Destination: &CommonOpts.Dry,
 }
 var EnvFlag = cli.StringFlag{
 	Name:        "env",
@@ -42,6 +50,7 @@ var PortFlag = func(p int) *cli.IntFlag {
 
 var CommonFlags = []cli.Flag{
 	&ConsoleFlag,
+	&DryFlag,
 	&EnvFlag,
 	&SlotOffset,
 }

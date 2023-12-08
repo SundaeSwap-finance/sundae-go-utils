@@ -24,7 +24,6 @@ func main() {
 		action,
 		append(
 			sundaecli.CommonFlags,
-			sundaecli.PortFlag(5001),
 			&cli.StringFlag{
 				Name:        "suffix",
 				Usage:       "suffix to append to the greeting",
