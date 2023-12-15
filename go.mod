@@ -24,6 +24,7 @@ require (
 	github.com/awslabs/kinesis-aggregation/go v0.0.0-20200810181507-d352038274c0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
 	github.com/fxamacker/cbor/v2 v2.5.0 // indirect
+	github.com/go-chi/chi/v5 v5.0.10 // indirect
 	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
