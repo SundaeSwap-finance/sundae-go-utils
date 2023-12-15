@@ -9,7 +9,7 @@ import (
 
 type BaseConfig struct {
 	Logger  zerolog.Logger
-	Service sundaecli.Service
+	Service *sundaecli.Service
 }
 
 func NewConfig(service sundaecli.Service) BaseConfig {
@@ -18,6 +18,6 @@ func NewConfig(service sundaecli.Service) BaseConfig {
 			Str("service", service.Name).
 			Str("version", service.Version).
 			Logger(),
-		Service: service,
+		Service: &service,
 	}
 }
