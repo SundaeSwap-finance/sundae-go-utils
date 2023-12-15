@@ -2,6 +2,7 @@ package sundaecli
 
 type Service struct {
 	Name    string
+	Subpath string
 	Version string
 	Schema  string
 }
@@ -9,6 +10,15 @@ type Service struct {
 func NewService(name string) Service {
 	return Service{
 		Name:    name,
+		Subpath: "",
+		Version: CommitHash(),
+	}
+}
+
+func NewSubpathService(name string) Service {
+	return Service{
+		Name:    name,
+		Subpath: name,
 		Version: CommitHash(),
 	}
 }

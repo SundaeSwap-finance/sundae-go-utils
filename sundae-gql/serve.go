@@ -79,6 +79,6 @@ func Serve(router chi.Router, config *BaseConfig) error {
 		return http.ListenAndServe(addr, router)
 	}
 
-	lambda.Start(apigateway.Wrap(router, sundaecli.CommonOpts.Env))
+	lambda.Start(apigateway.Wrap(router, sundaecli.CommonOpts.Env, config.Service.Subpath))
 	return nil
 }
