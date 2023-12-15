@@ -24,7 +24,7 @@ func New(endpoint string) http.HandlerFunc {
 			Route string
 		}
 		variables.Route = endpoint
-		if err := templ.Execute(&buffer, endpoint); err != nil {
+		if err := templ.Execute(&buffer, variables); err != nil {
 			fmt.Printf("Error: %v\n", err)
 			w.WriteHeader(http.StatusInternalServerError)
 		}
