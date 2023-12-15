@@ -39,7 +39,11 @@ func Webserver(resolver Resolver) error {
 	// Allow arbitrary path parameters, for better UX in the browser
 	router.Post("/graphql/*", middleware.NoCache(relay).ServeHTTP)
 	if AllowIntrospection() {
-		router.Get("/graphql", graphiql.New("/graphql"))
+		path := "/graphql"
+		if config.Service.Subpath != "" {
+			path = fmt.Sprintf("/%v/%v", config.Service.Subpath, path)
+		}
+		router.Get("/graphql", graphiql.New(path))
 	}
 
 	return Serve(router, config)
