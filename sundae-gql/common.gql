@@ -28,3 +28,15 @@ enum Version {
     V1
     V3
 }
+
+""" A quantity and a unit """
+type AssetAmount {
+    quantity: BigInteger!
+    asset: Asset!
+}
+
+""" A ratio between two assets """
+type AssetRatio {
+    numerator: AssetAmount!
+    denominator: AssetAmount!
+}
