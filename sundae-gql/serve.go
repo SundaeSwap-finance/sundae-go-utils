@@ -32,7 +32,7 @@ func Webserver(resolver Resolver) error {
 	if AllowIntrospection() {
 		path := "/graphql"
 		if config.Service.Subpath != "" {
-			path = fmt.Sprintf("/%v/%v", config.Service.Subpath, path)
+			path = fmt.Sprintf("/%v/graphql", config.Service.Subpath)
 		}
 		router.Get("/graphql", graphiql.New(path))
 	}
@@ -80,6 +80,11 @@ func Serve(router chi.Router, config *BaseConfig) error {
 	if sundaecli.CommonOpts.Console {
 		config.Logger.Info().Int("port", sundaecli.CommonOpts.Port).Msgf("starting %v", config.Service.Name)
 		addr := fmt.Sprintf(":%v", sundaecli.CommonOpts.Port)
+		if config.Service.Subpath != "" {
+			newRouter := chi.NewRouter()
+			newRouter.Mount(fmt.Sprintf("/%v", config.Service.Subpath), router)
+			router = newRouter
+		}
 		return http.ListenAndServe(addr, router)
 	}
 

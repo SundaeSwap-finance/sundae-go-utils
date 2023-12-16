@@ -45,7 +45,7 @@ func (r *Resolver) Schema() string {
 func (r *Resolver) Config() *sundaegql.BaseConfig {
 	return &sundaegql.BaseConfig{
 		Logger:  sundaecli.Logger(service),
-		Service: service,
+		Service: &service,
 	}
 }
 
