@@ -8,8 +8,8 @@ import (
 	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
 
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/graph-gophers/graphql-go"
 	"github.com/graph-gophers/graphql-go/relay"
 	"github.com/rs/zerolog"

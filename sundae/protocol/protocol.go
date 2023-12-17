@@ -1,79 +1,38 @@
 package protocol
 
 import (
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
+
+	sundaegql "github.com/SundaeSwap-finance/sundae-go-utils/sundae-gql"
 )
 
+// TODO: ogmigo type?
 type TxIn struct {
-	Hash  []byte
-	Index int
-}
-
-func (t *TxIn) UnmarshalJSON(data []byte) error {
-	var m struct {
-		Hash  string
-		Index int
-	}
-	err := json.Unmarshal(data, &m)
-	if err != nil {
-		return err
-	}
-	hash := m.Hash
-	index := m.Index
-	hashBytes, err := hex.DecodeString(hash)
-	if err != nil {
-		return err
-	}
-	t.Hash = hashBytes
-	t.Index = index
-	return nil
+	Hash  sundaegql.HexBytes `dynamodbav:"hash"`
+	Index int32              `dynamodbav:",omitempty"`
 }
 
 type Validator struct {
-	Title        string
-	CompiledCode []byte
-	Hash         []byte
-}
-
-func (v *Validator) UnmarshalJSON(data []byte) error {
-	var s struct {
-		Title        string
-		CompiledCode string
-		Hash         string
-	}
-	err := json.Unmarshal(data, &s)
-	if err != nil {
-		return err
-	}
-	code := s.CompiledCode
-	hash := s.Hash
-	codeBytes, err := hex.DecodeString(code)
-	if err != nil {
-		return err
-	}
-	hashBytes, err := hex.DecodeString(hash)
-	if err != nil {
-		return err
-	}
-	v.Title = s.Title
-	v.CompiledCode = codeBytes
-	v.Hash = hashBytes
-	return nil
+	Title        string             `dynamodbav:"title"`
+	CompiledCode sundaegql.HexBytes `dynamodbav:"compiledCode"`
+	Hash         sundaegql.HexBytes `dynamodbav:"hash"`
 }
 
 type Blueprint struct {
-	Validators []Validator
+	Validators []Validator `dynamodbav:"validators"`
+}
+
+type ScriptReference struct {
+	Key  string `dynamodbav:"key"`
+	TxIn TxIn   `dynamodbav:"txIn"`
 }
 
 type Protocol struct {
-	Version      string
-	Environment  string
-	Blueprint    Blueprint
-	BlueprintUrl string
-	References   map[string]TxIn
-	Network      string
+	Version      string            `dynamodbav:"version"`
+	Environment  string            `dynamodbav:"environment"`
+	Blueprint    Blueprint         `dynamodbav:"blueprint"`
+	BlueprintUrl string            `dynamodbav:"-"`
+	References   []ScriptReference `dynamodbav:"references"`
 }
 
 const OrderScriptKey = "order.spend"
@@ -87,7 +46,7 @@ func (p *Protocol) getScript(key string) ([]byte, error) {
 			return v.CompiledCode, nil
 		}
 	}
-	return nil, fmt.Errorf("Couldn't find '%s' script in the blueprint", key)
+	return nil, fmt.Errorf("couldn't find '%s' script in the blueprint", key)
 }
 
 func (p *Protocol) GetOrderScript() ([]byte, error) {

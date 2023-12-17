@@ -23,6 +23,9 @@ scalar BigInteger
 """ A unitless rational number, serialized as an array of numerator and denominator """
 scalar Fraction
 
+""" A set of bytes, serialized as a hex string """
+scalar HexBytes
+
 """ The protocol version tag we're working with """
 enum Version {
     V1

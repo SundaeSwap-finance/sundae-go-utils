@@ -38,4 +38,5 @@ require (
 	google.golang.org/protobuf v1.23.0 // indirect
 )
 
+// replace github.com/SundaeSwap-finance/sundae-go-utils => ./...
 // replace github.com/SundaeSwap-finance/apollo => ../apollo
