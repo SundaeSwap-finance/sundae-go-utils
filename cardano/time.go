@@ -71,6 +71,9 @@ func SlotToDateTimeEnv(slot uint64, env string) (DateTime, error) {
 }
 
 func TimeToSlotEnv(time time.Time, env string) (uint64, error) {
+	if env == "" {
+		env = sundaecli.CommonOpts.Env
+	}
 	switch env {
 	case "preview":
 		return TimeToSlot(time, SlotOffsetPreview), nil
