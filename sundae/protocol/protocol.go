@@ -35,6 +35,20 @@ type Protocol struct {
 	References   []ScriptReference `dynamodbav:"references"`
 }
 
+type Protocols []Protocol
+
+func (ps Protocols) Find(version string) (Protocol, bool) {
+	if version == "" {
+		version = "V1"
+	}
+	for _, p := range ps {
+		if p.Version == version {
+			return p, true
+		}
+	}
+	return Protocol{}, false
+}
+
 func (b Blueprint) Find(key string) (Validator, bool) {
 	for _, v := range b.Validators {
 		if v.Title == key {
