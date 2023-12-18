@@ -13,10 +13,7 @@ var opts struct {
 	Suffix string
 }
 
-var service = sundaecli.Service{
-	Name:    "example-cli",
-	Version: sundaecli.CommitHash(),
-}
+var service = sundaecli.NewService("example-cli")
 
 func main() {
 	app := sundaecli.App(

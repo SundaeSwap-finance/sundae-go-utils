@@ -35,6 +35,15 @@ type Protocol struct {
 	References   []ScriptReference `dynamodbav:"references"`
 }
 
+func (b Blueprint) Find(key string) (Validator, bool) {
+	for _, v := range b.Validators {
+		if v.Title == key {
+			return v, true
+		}
+	}
+	return Validator{}, false
+}
+
 const OrderScriptKey = "order.spend"
 const PoolScriptKey = "pool.spend"
 const SettingsScriptKey = "settings.spend"
