@@ -17,20 +17,21 @@ require (
 	github.com/SundaeSwap-finance/ogmigo/v6 v6.0.0-20231128043329-e8ced51013a1
 	github.com/SundaeSwap-finance/sundae-sync v0.0.0-20231129062440-e3d0c42ddb69
 	github.com/aws/aws-sdk-go v1.48.7
+	github.com/go-chi/chi/v5 v5.0.10
 	github.com/harlow/kinesis-consumer v0.3.5
+	github.com/savaki/ddb v0.0.0-20231021205115-8066867efca2
+	golang.org/x/sync v0.5.0
 )
 
 require (
 	github.com/awslabs/kinesis-aggregation/go v0.0.0-20200810181507-d352038274c0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
 	github.com/fxamacker/cbor/v2 v2.5.0 // indirect
-	github.com/go-chi/chi/v5 v5.0.10 // indirect
 	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	github.com/savaki/ddb v0.0.0-20231021205115-8066867efca2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	golang.org/x/text v0.14.0 // indirect
