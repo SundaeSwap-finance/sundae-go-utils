@@ -68,6 +68,10 @@ func NewTxHandler(
 	return NewHandler(service, nil, rollForward, rollBackward)
 }
 
+func (h *Handler) SetCursorUsage(usage string) {
+	h.cursorUsage = usage
+}
+
 func (h *Handler) Start() error {
 	switch {
 	case sundaecli.CommonOpts.Console:
