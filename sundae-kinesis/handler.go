@@ -23,9 +23,10 @@ type RollForwardTxCallback func(ctx context.Context, logger zerolog.Logger, tx c
 type RollBackwardCallback func(ctx context.Context, logger zerolog.Logger, block uint64, txs ...string) error
 
 type Handler struct {
-	service sundaecli.Service
-	logger  zerolog.Logger
-	cursor  *cursordao.DAO
+	service     sundaecli.Service
+	logger      zerolog.Logger
+	cursor      *cursordao.DAO
+	cursorUsage string
 
 	rollForwardBlock RollForwardBlockCallback
 	rollForwardTx    RollForwardTxCallback
@@ -44,6 +45,7 @@ func NewHandler(
 		service:          service,
 		logger:           sundaecli.Logger(service),
 		cursor:           cursordao.Build(api, sundaecli.CommonOpts.Env),
+		cursorUsage:      service.Name,
 		rollForwardBlock: rollForwardBlock,
 		rollForwardTx:    rollForwardTx,
 		rollBackward:     rollBackward,
@@ -116,7 +118,7 @@ func (h *Handler) onRollForward(ctx context.Context, block *chainsync.Block) (er
 	h.logger.Info().Uint64("slot", block.Slot).Msg("Roll forward")
 
 	if !sundaecli.CommonOpts.Dry {
-		if err := h.cursor.Save(ctx, block.PointStruct(), h.service.Name, block.Transactions...); err != nil {
+		if err := h.cursor.Save(ctx, block.PointStruct(), h.cursorUsage, block.Transactions...); err != nil {
 			h.logger.Warn().Err(err).Uint64("slot", block.Slot).Msg("failed to save point")
 			return err
 		}
@@ -147,7 +149,7 @@ func (h *Handler) onRollBackward(ctx context.Context, ps *chainsync.PointStruct)
 		}
 		return nil
 	} else {
-		return h.cursor.Rollback(ctx, ps.Slot, h.service.Name, func(ctx context.Context, block uint64, txs ...string) error {
+		return h.cursor.Rollback(ctx, ps.Slot, h.cursorUsage, func(ctx context.Context, block uint64, txs ...string) error {
 			if h.rollBackward != nil {
 				return h.rollBackward(ctx, h.logger, block, txs...)
 			}
