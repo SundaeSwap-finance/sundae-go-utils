@@ -99,6 +99,15 @@ func (v Validator) IsPaymentCredentialOf(address string) bool {
 	return bytes.Equal(payment, v.Hash)
 }
 
+// V1 specific constants
+const V1FactoryNFTHexName = "666163746F7279"
+const V1PoolNFTHexPrefix = "7020"
+const V1LPHexPrefix = "6c7020"
+
+// V3 specific constants
+const V3PoolNFTHexPrefix = "000de140"
+const V3LPHexPrefix = "0014df10"
+
 const OrderScriptKey = "order.spend"
 const PoolScriptKey = "pool.spend"
 const SettingsScriptKey = "settings.spend"
