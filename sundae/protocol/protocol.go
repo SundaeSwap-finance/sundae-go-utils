@@ -1,9 +1,18 @@
 package protocol
 
 import (
+	"bytes"
 	"fmt"
 
 	sundaegql "github.com/SundaeSwap-finance/sundae-go-utils/sundae-gql"
+	"github.com/savaki/bech32"
+)
+
+type ProtocolVersion string
+
+var (
+	V1 ProtocolVersion = "V1"
+	V3 ProtocolVersion = "V3"
 )
 
 // TODO: ogmigo type?
@@ -28,7 +37,7 @@ type ScriptReference struct {
 }
 
 type Protocol struct {
-	Version      string            `dynamodbav:"version"`
+	Version      ProtocolVersion   `dynamodbav:"version"`
 	Environment  string            `dynamodbav:"environment"`
 	Blueprint    Blueprint         `dynamodbav:"blueprint"`
 	BlueprintUrl string            `dynamodbav:"-"`
@@ -37,9 +46,9 @@ type Protocol struct {
 
 type Protocols []Protocol
 
-func (ps Protocols) Find(version string) (Protocol, bool) {
+func (ps Protocols) Find(version ProtocolVersion) (Protocol, bool) {
 	if version == "" {
-		version = "V1"
+		version = V1
 	}
 	for _, p := range ps {
 		if p.Version == version {
@@ -49,6 +58,20 @@ func (ps Protocols) Find(version string) (Protocol, bool) {
 	return Protocol{}, false
 }
 
+func (ps Protocols) IsRelevant(address string) (Protocol, bool, error) {
+	_, bb, err := bech32.Decode(address)
+	if err != nil {
+		return Protocol{}, false, err
+	}
+	payment := bb[1:29]
+	for _, p := range ps {
+		if p.IsRelevant(payment) {
+			return p, true, nil
+		}
+	}
+	return Protocol{}, false, nil
+}
+
 func (b Blueprint) Find(key string) (Validator, bool) {
 	for _, v := range b.Validators {
 		if v.Title == key {
@@ -56,6 +79,24 @@ func (b Blueprint) Find(key string) (Validator, bool) {
 		}
 	}
 	return Validator{}, false
+}
+
+func (p Protocol) IsRelevant(paymentCredential []byte) bool {
+	for _, v := range p.Blueprint.Validators {
+		if bytes.Equal(paymentCredential, v.Hash) {
+			return true
+		}
+	}
+	return false
+}
+
+func (v Validator) IsPaymentCredentialOf(address string) bool {
+	_, bb, err := bech32.Decode(address)
+	if err != nil {
+		return false
+	}
+	payment := bb[1:29]
+	return bytes.Equal(payment, v.Hash)
 }
 
 const OrderScriptKey = "order.spend"

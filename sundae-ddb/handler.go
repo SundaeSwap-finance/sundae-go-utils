@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 
 	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -24,7 +23,7 @@ type DeleteCallback func(ctx context.Context, oldValue map[string]*dynamodb.Attr
 
 type Handler struct {
 	service sundaecli.Service
-	logger  zerolog.Logger
+	Logger  zerolog.Logger
 
 	onInsert InsertCallback
 	onUpdate UpdateCallback
@@ -39,7 +38,7 @@ func NewHandler(
 ) *Handler {
 	return &Handler{
 		service:  service,
-		logger:   sundaecli.Logger(service),
+		Logger:   sundaecli.Logger(service),
 		onInsert: onInsert,
 		onUpdate: onUpdate,
 		onDelete: onDelete,
@@ -58,10 +57,10 @@ func (h *Handler) Start() error {
 }
 
 func (h *Handler) HandleEvent(ctx context.Context, event ddb.Event) error {
-	h.logger.Trace().Int("count", len(event.Records)).Msg("handling a batch of events")
+	h.Logger.Trace().Int("count", len(event.Records)).Msg("handling a batch of events")
 	for _, record := range event.Records {
 		if err := h.HandleSingleRecord(ctx, record); err != nil {
-			h.logger.Error().Err(err).Str("event", record.EventID).Msg("unable to handle record")
+			h.Logger.Error().Err(err).Str("event", record.EventID).Msg("unable to handle record")
 			return fmt.Errorf("unable to handle record: %w", err)
 		}
 	}
@@ -110,8 +109,6 @@ func (h *Handler) handleRealtime() error {
 	group, ctx := errgroup.WithContext(context.Background())
 	group.SetLimit(64)
 
-	var mutex sync.Mutex
-
 	for _, shard_ := range shards.StreamDescription.Shards {
 		shard := shard_
 		group.Go(func() error {
@@ -141,19 +138,16 @@ func (h *Handler) handleRealtime() error {
 					if err := json.Unmarshal(raw, &ddbr); err != nil {
 						return fmt.Errorf("unable to unmarshal record: %w", err)
 					}
-					mutex.Lock()
 					if err := h.HandleSingleRecord(ctx, ddbr); err != nil {
 						return fmt.Errorf("error processing record %v: %w", ddbr.EventID, err)
 					}
-					mutex.Unlock()
 				}
 				it.ShardIterator = records.NextShardIterator
 			}
 			return nil
 		})
 	}
-	group.Wait()
-	return nil
+	return group.Wait()
 }
 
 func ParseItem(item map[string]*dynamodb.AttributeValue, v interface{}) error {

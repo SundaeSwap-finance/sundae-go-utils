@@ -19,6 +19,7 @@ require (
 	github.com/aws/aws-sdk-go v1.48.7
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/harlow/kinesis-consumer v0.3.5
+	github.com/savaki/bech32 v0.0.0-20220223220548-20f899656a90
 	github.com/savaki/ddb v0.0.0-20231021205115-8066867efca2
 	golang.org/x/sync v0.5.0
 )
@@ -28,6 +29,7 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
 	github.com/fxamacker/cbor/v2 v2.5.0 // indirect
 	github.com/golang/protobuf v1.4.2 // indirect
+	github.com/icza/bitio v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

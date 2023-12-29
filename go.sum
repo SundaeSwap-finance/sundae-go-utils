@@ -90,6 +90,9 @@ github.com/graph-gophers/graphql-go v1.5.0/go.mod h1:YtmJZDLbF1YYNrlNAuiO5zAStUW
 github.com/harlow/kinesis-consumer v0.3.5 h1:xeiDp2frP8DdKDeOzVuS+vaBX03JjifQO/Apzu4IOMA=
 github.com/harlow/kinesis-consumer v0.3.5/go.mod h1:rXXWZgbaSB+eBYSIFOIrdBwGiyAzAw9fWvAftdxR680=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
+github.com/icza/bitio v1.0.0 h1:squ/m1SHyFeCA6+6Gyol1AxV9nmPPlJFT8c2vKdj3U8=
+github.com/icza/bitio v1.0.0/go.mod h1:0jGnlLAx8MKMr9VGnn/4YrvZiprkvBelsVIbA9Jjr9A=
+github.com/icza/mighty v0.0.0-20180919140131-cfd07d671de6/go.mod h1:xQig96I1VNBDIWGCdTt54nHt6EeI639SmHycLYL7FkA=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=
 github.com/jmespath/go-jmespath v0.3.0/go.mod h1:9QtRXoHjLGCJ5IBSaohpXITPlowMeeYCZ7fLUTSywik=
 github.com/jmespath/go-jmespath v0.4.0 h1:BEgLn5cpjn8UN1mAw4NjwDrS35OdebyEtFe+9YPoQUg=
@@ -134,6 +137,8 @@ github.com/russross/blackfriday/v2 v2.1.0 h1:JIOH55/0cWyOuilr9/qlrm0BSXldqnqwMsf
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/savaki/apigateway v0.0.0-20221128200736-ed62fddee4c2 h1:y2g2b8MklX9ggs59tabLGWrEuEP7Y37IQsNTe3+kD48=
 github.com/savaki/apigateway v0.0.0-20221128200736-ed62fddee4c2/go.mod h1:BYfQsP95VGbwdGjRCP2eLfICgwLcdviEm0C0HC16mGE=
+github.com/savaki/bech32 v0.0.0-20220223220548-20f899656a90 h1:YSvcTYQWPTLEn8yGJVFVfltccqWZ2+D5/2sswLJztr8=
+github.com/savaki/bech32 v0.0.0-20220223220548-20f899656a90/go.mod h1:m1Hh3kOWX0yyZNy5SC6ozfn1iOQCVaguB0t+2oj4Ims=
 github.com/savaki/ddb v0.0.0-20231021205115-8066867efca2 h1:2Rdht+hOTk+XOIbTmDGYtZi541kBxMHycMO0LF0MgO8=
 github.com/savaki/ddb v0.0.0-20231021205115-8066867efca2/go.mod h1:YywhSyC2QQolg1gQt0sgTVdqXo8sgyNztR7ZvCY/QgY=
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
