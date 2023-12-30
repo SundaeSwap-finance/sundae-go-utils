@@ -35,8 +35,8 @@ func action(_ *cli.Context) error {
 	return handler.Start()
 }
 
-func rollForwardTx(ctx context.Context, logger zerolog.Logger, tx chainsync.Tx) error {
-	logger.Info().Str("txHash", tx.ID).Msg("Roll forward")
+func rollForwardTx(ctx context.Context, logger zerolog.Logger, point chainsync.PointStruct, tx chainsync.Tx) error {
+	logger.Info().Str("txHash", tx.ID).Str("point", point.Point().String()).Msg("Roll forward")
 	return nil
 }
 

@@ -19,7 +19,7 @@ import (
 )
 
 type RollForwardBlockCallback func(ctx context.Context, block *chainsync.Block) error
-type RollForwardTxCallback func(ctx context.Context, logger zerolog.Logger, tx chainsync.Tx) error
+type RollForwardTxCallback func(ctx context.Context, logger zerolog.Logger, point chainsync.PointStruct, tx chainsync.Tx) error
 type RollBackwardCallback func(ctx context.Context, logger zerolog.Logger, block uint64, txs ...string) error
 
 type Handler struct {
@@ -136,7 +136,7 @@ func (h *Handler) onRollForward(ctx context.Context, block *chainsync.Block) (er
 
 	if h.rollForwardTx != nil {
 		for _, tx := range block.Transactions {
-			if err := h.rollForwardTx(ctx, h.logger, tx); err != nil {
+			if err := h.rollForwardTx(ctx, h.logger, block.PointStruct(), tx); err != nil {
 				return err
 			}
 		}
