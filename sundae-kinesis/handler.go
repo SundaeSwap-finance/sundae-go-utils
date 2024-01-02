@@ -7,6 +7,7 @@ import (
 
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync"
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync/compatibility"
+	"github.com/SundaeSwap-finance/sundae-go-utils/cardano"
 	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
 	"github.com/SundaeSwap-finance/sundae-sync/dao/cursordao"
 	"github.com/aws/aws-lambda-go/events"
@@ -119,7 +120,11 @@ func (h *Handler) handleSingleEvent(ctx context.Context, r events.KinesisEventRe
 }
 
 func (h *Handler) onRollForward(ctx context.Context, block *chainsync.Block) (err error) {
-	h.logger.Info().Uint64("slot", block.Slot).Msg("Roll forward")
+	slotTime, err := cardano.SlotToDateTimeEnv(block.Slot, "")
+	if err != nil {
+		return fmt.Errorf("failed to convert slot to datetime: %w", err)
+	}
+	h.logger.Info().Uint64("slot", block.Slot).Time("blockTime", slotTime.Instant).Str("blockHash", block.ID).Msg("Roll forward")
 
 	if !sundaecli.CommonOpts.Dry {
 		if err := h.cursor.Save(ctx, block.PointStruct(), h.cursorUsage, block.Transactions...); err != nil {

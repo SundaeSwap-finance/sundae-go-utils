@@ -32,6 +32,9 @@ const (
 )
 
 func EnvToSlotOffset(env string) (uint64, error) {
+	if env == "" {
+		env = sundaecli.CommonOpts.Env
+	}
 	switch env {
 	case "preview":
 		return SlotOffsetPreview, nil
