@@ -53,6 +53,26 @@ func StringFlag(name, usage string, dest *string, value ...string) *cli.StringFl
 	}
 }
 
+func StringSliceFlag(name, usage string, aliases []string, dest *cli.StringSlice) *cli.StringSliceFlag {
+	return &cli.StringSliceFlag{
+		Name:        name,
+		Aliases:     aliases,
+		Usage:       usage,
+		EnvVars:     []string{ToUNDER_CAPS(name)},
+		Destination: dest,
+	}
+}
+
+func TimestampFlag(name, layout, usage string, dest *cli.Timestamp) *cli.TimestampFlag {
+	return &cli.TimestampFlag{
+		Name:        name,
+		Layout:      layout,
+		Usage:       usage,
+		EnvVars:     []string{ToUNDER_CAPS(name)},
+		Destination: dest,
+	}
+}
+
 func IntFlag(name, usage string, dest *int, value ...int) *cli.IntFlag {
 	var v int
 	if len(value) > 0 {
