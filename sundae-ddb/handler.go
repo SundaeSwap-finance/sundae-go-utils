@@ -109,6 +109,8 @@ func (h *Handler) handleRealtime() error {
 	group, ctx := errgroup.WithContext(context.Background())
 	group.SetLimit(64)
 
+	h.Logger.Info().Str("tableName", DDBOpts.TableName).Int("shardCount", len(shards.StreamDescription.Shards)).Msg("responding to stream events")
+
 	for _, shard_ := range shards.StreamDescription.Shards {
 		shard := shard_
 		group.Go(func() error {
