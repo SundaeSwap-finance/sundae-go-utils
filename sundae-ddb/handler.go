@@ -17,6 +17,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type BatchCallback func(ctx context.Context, records []ddb.Record) error
 type InsertCallback func(ctx context.Context, newValue map[string]*dynamodb.AttributeValue) error
 type UpdateCallback func(ctx context.Context, oldValue, newValue map[string]*dynamodb.AttributeValue) error
 type DeleteCallback func(ctx context.Context, oldValue map[string]*dynamodb.AttributeValue) error
@@ -25,6 +26,7 @@ type Handler struct {
 	service sundaecli.Service
 	Logger  zerolog.Logger
 
+	onBatch  BatchCallback
 	onInsert InsertCallback
 	onUpdate UpdateCallback
 	onDelete DeleteCallback
@@ -45,6 +47,17 @@ func NewHandler(
 	}
 }
 
+func NewBatchHandler(
+	service sundaecli.Service,
+	onBatch BatchCallback,
+) *Handler {
+	return &Handler{
+		service: service,
+		Logger:  sundaecli.Logger(service),
+		onBatch: onBatch,
+	}
+}
+
 func (h *Handler) Start() error {
 	switch {
 	case sundaecli.CommonOpts.Console:
@@ -58,6 +71,9 @@ func (h *Handler) Start() error {
 
 func (h *Handler) HandleEvent(ctx context.Context, event ddb.Event) error {
 	h.Logger.Trace().Int("count", len(event.Records)).Msg("handling a batch of events")
+	if h.onBatch != nil {
+		return h.onBatch(ctx, event.Records)
+	}
 	for _, record := range event.Records {
 		if err := h.HandleSingleRecord(ctx, record); err != nil {
 			h.Logger.Error().Err(err).Str("event", record.EventID).Msg("unable to handle record")
