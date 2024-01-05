@@ -84,6 +84,9 @@ func (h *Handler) HandleEvent(ctx context.Context, event ddb.Event) error {
 }
 
 func (h *Handler) HandleSingleRecord(ctx context.Context, record ddb.Record) error {
+	if h.onBatch != nil {
+		return h.onBatch(ctx, ddb.Event{Records: []ddb.Record{record}})
+	}
 	switch record.EventName {
 	case "INSERT":
 		if h.onInsert != nil {
@@ -116,18 +119,29 @@ func (h *Handler) handleRealtime() error {
 		return fmt.Errorf("too few or too many streams (%v) for table %v", len(ss.Streams), DDBOpts.TableName)
 	}
 	stream := ss.Streams[0]
-	shards, err := streams.DescribeStream(&dynamodbstreams.DescribeStreamInput{
-		StreamArn: stream.StreamArn,
-	})
-	if err != nil {
-		return fmt.Errorf("unable to describe stream %v: %w", *stream.StreamArn, err)
+
+	var shards []*dynamodbstreams.Shard
+	var lastShard *string
+	for {
+		ss, err := streams.DescribeStream(&dynamodbstreams.DescribeStreamInput{
+			StreamArn:             stream.StreamArn,
+			ExclusiveStartShardId: lastShard,
+		})
+		if err != nil {
+			return fmt.Errorf("unable to describe stream %v: %w", *stream.StreamArn, err)
+		}
+		shards = append(shards, ss.StreamDescription.Shards...)
+		if ss.StreamDescription.LastEvaluatedShardId == nil {
+			break
+		}
+		lastShard = ss.StreamDescription.LastEvaluatedShardId
 	}
 	group, ctx := errgroup.WithContext(context.Background())
-	group.SetLimit(64)
+	group.SetLimit(256)
 
-	h.Logger.Info().Str("tableName", DDBOpts.TableName).Int("shardCount", len(shards.StreamDescription.Shards)).Msg("responding to stream events")
+	h.Logger.Info().Str("tableName", DDBOpts.TableName).Int("shardCount", len(shards)).Msg("responding to stream events")
 
-	for _, shard_ := range shards.StreamDescription.Shards {
+	for _, shard_ := range shards {
 		shard := shard_
 		group.Go(func() error {
 			it, err := streams.GetShardIteratorWithContext(ctx, &dynamodbstreams.GetShardIteratorInput{
