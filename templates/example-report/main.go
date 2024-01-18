@@ -28,7 +28,7 @@ func main() {
 }
 
 func action(_ *cli.Context) error {
-	handler := sundaereport.NewHandler(service, "example-report/sample", generate)
+	handler := sundaereport.NewHandler(service, "sample", generate)
 
 	return handler.Start()
 }

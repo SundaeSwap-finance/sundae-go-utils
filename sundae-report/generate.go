@@ -32,8 +32,8 @@ type Handler struct {
 	generate GenerateCallback
 }
 
-func ReportKey(reportName string, timestamp time.Time) string {
-	return fmt.Sprintf("%v/%v/%v/%v", reportName, timestamp.Format("2006-01-02"), timestamp.Format("15"), timestamp.Format("2006-01-02-15:04:05.json"))
+func ReportKey(serviceName, reportName string, timestamp time.Time) string {
+	return fmt.Sprintf("%v/%v/%v/%v/%v", serviceName, reportName, timestamp.Format("2006-01-02"), timestamp.Format("15"), timestamp.Format("2006-01-02-15:04:05.json"))
 }
 
 func NewHandler(
@@ -80,7 +80,7 @@ func (h *Handler) Generate(ctx context.Context, _ json.RawMessage) error {
 			return err
 		}
 	} else {
-		filename := ReportKey(h.reportName, now)
+		filename := ReportKey(h.service.Name, h.reportName, now)
 		h.logger.Info().Str("bucket", ReportOpts.Bucket).Str("filename", filename).Int("size", len(reportBytes)).Msg("saving report to s3")
 		_, err = h.s3.PutObject(&s3.PutObjectInput{
 			Bucket: aws.String(ReportOpts.Bucket),
@@ -95,10 +95,10 @@ func (h *Handler) Generate(ctx context.Context, _ json.RawMessage) error {
 	return nil
 }
 
-func GetRawAsOf(ctx context.Context, s3Api s3iface.S3API, bucket, reportName string, timestamp time.Time) ([]byte, string, error) {
+func GetRawAsOf(ctx context.Context, s3Api s3iface.S3API, bucket, servicename, reportName string, timestamp time.Time) ([]byte, string, error) {
 	count := 0
 	for {
-		prefix := fmt.Sprintf("%v/%v", reportName, timestamp.Format("2006-01-02"))
+		prefix := fmt.Sprintf("%v/%v/%v", servicename, reportName, timestamp.Format("2006-01-02"))
 		listInput := s3.ListObjectsV2Input{
 			Bucket:  aws.String(bucket),
 			MaxKeys: aws.Int64(1000),
@@ -142,9 +142,9 @@ func GetRawAsOf(ctx context.Context, s3Api s3iface.S3API, bucket, reportName str
 	}
 }
 
-func GetLatest(ctx context.Context, s3Api s3iface.S3API, bucket, reportName string, obj any) (string, error) {
+func GetLatest(ctx context.Context, s3Api s3iface.S3API, bucket, serviceName, reportName string, obj any) (string, error) {
 	now := time.Now().UTC()
-	bytes, filename, err := GetRawAsOf(ctx, s3Api, bucket, reportName, now)
+	bytes, filename, err := GetRawAsOf(ctx, s3Api, bucket, serviceName, reportName, now)
 	if err != nil {
 		return "", err
 	}
@@ -156,7 +156,7 @@ func GetLatest(ctx context.Context, s3Api s3iface.S3API, bucket, reportName stri
 
 func (h *Handler) Start() error {
 	if ReportOpts.GetLatest {
-		bytes, filename, err := GetRawAsOf(context.Background(), h.s3, ReportOpts.Bucket, h.reportName, time.Now().UTC())
+		bytes, filename, err := GetRawAsOf(context.Background(), h.s3, ReportOpts.Bucket, h.service.Name, h.reportName, time.Now().UTC())
 		if err != nil {
 			return err
 		}
