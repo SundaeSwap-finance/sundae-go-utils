@@ -2,8 +2,10 @@ package protocol
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 
+	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/shared"
 	sundaegql "github.com/SundaeSwap-finance/sundae-go-utils/sundae-gql"
 	"github.com/savaki/bech32"
 )
@@ -136,4 +138,20 @@ func (p *Protocol) GetSettingsScript() ([]byte, error) {
 
 func (p *Protocol) GetStakeScript() ([]byte, error) {
 	return p.getScript(StakeScriptKey)
+}
+
+func (p Protocol) GetLPToken(ident string) shared.AssetID {
+	poolScript, ok := p.Blueprint.Find("pool.mint")
+	if !ok {
+		panic("assumed pool.mint, but not found in protocol")
+	}
+	poolScriptHash := hex.EncodeToString(poolScript.Hash)
+	switch p.Version {
+	case V1:
+		return shared.FromSeparate(poolScriptHash, V1LPHexPrefix+ident)
+	case V3:
+		return shared.FromSeparate(poolScriptHash, V3LPHexPrefix+ident)
+	default:
+		panic("unrecognized protocol")
+	}
 }
