@@ -2,6 +2,7 @@ package sundaegql
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -28,7 +29,12 @@ func (a *HexBytes) UnmarshalGraphQL(input interface{}) error {
 }
 
 func (h *HexBytes) UnmarshalJSON(data []byte) error {
-	s, err := hex.DecodeString(string(data))
+	var hexString string
+	err := json.Unmarshal(data, &hexString)
+	if err != nil {
+		return err
+	}
+	s, err := hex.DecodeString(hexString)
 	if err != nil {
 		return err
 	}
