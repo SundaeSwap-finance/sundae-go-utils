@@ -67,17 +67,21 @@ func (h *Handler) Generate(ctx context.Context, _ json.RawMessage) error {
 	now := time.Now()
 	var filename string
 	if sundaecli.CommonOpts.Dry {
-		if ReportOpts.OutFile != "" {
-			filename = ReportOpts.OutFile
+		if ReportOpts.OutFile == "" {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			if err := enc.Encode(report); err != nil {
+				return err
+			}
 		} else {
 			filename = fmt.Sprintf("%v-%v.json", h.reportName, now.Format("2006-01-02-15:04:05"))
-		}
-		if err := os.MkdirAll(path.Dir(filename), 0755); err != nil {
-			return err
-		}
-		h.logger.Info().Str("bucket", ReportOpts.Bucket).Str("filename", filename).Int("size", len(reportBytes)).Msg("dry run, saving report locally")
-		if err := os.WriteFile(filename, reportBytes, 0644); err != nil {
-			return err
+			if err := os.MkdirAll(path.Dir(filename), 0755); err != nil {
+				return err
+			}
+			h.logger.Info().Str("bucket", ReportOpts.Bucket).Str("filename", filename).Int("size", len(reportBytes)).Msg("dry run, saving report locally")
+			if err := os.WriteFile(filename, reportBytes, 0644); err != nil {
+				return err
+			}
 		}
 	} else {
 		filename := ReportKey(h.service.Name, h.reportName, now)
@@ -156,18 +160,23 @@ func GetLatest(ctx context.Context, s3Api s3iface.S3API, bucket, serviceName, re
 
 func (h *Handler) Start() error {
 	if ReportOpts.GetLatest {
-		bytes, filename, err := GetRawAsOf(context.Background(), h.s3, ReportOpts.Bucket, h.service.Name, h.reportName, time.Now().UTC())
+		reportBytes, filename, err := GetRawAsOf(context.Background(), h.s3, ReportOpts.Bucket, h.service.Name, h.reportName, time.Now().UTC())
 		if err != nil {
 			return err
 		}
-		if ReportOpts.OutFile != "" {
-			filename = ReportOpts.OutFile
-		}
-		if err := os.MkdirAll(path.Dir(filename), 0755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(ReportOpts.OutFile, bytes, 0644); err != nil {
-			return err
+		if ReportOpts.OutFile == "" {
+			var prettyBytes bytes.Buffer
+			if err := json.Indent(&prettyBytes, reportBytes, "", "  "); err != nil {
+				return err
+			}
+			os.Stdout.Write(prettyBytes.Bytes())
+		} else {
+			if err := os.MkdirAll(path.Dir(filename), 0755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(ReportOpts.OutFile, reportBytes, 0644); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
