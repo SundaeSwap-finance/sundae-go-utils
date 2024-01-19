@@ -64,7 +64,7 @@ func (h *Handler) Generate(ctx context.Context, _ json.RawMessage) error {
 		return err
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	var filename string
 	if sundaecli.CommonOpts.Dry {
 		if ReportOpts.OutFile == "" {
