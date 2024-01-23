@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	sundaegql "github.com/SundaeSwap-finance/sundae-go-utils/sundae-gql"
+	"github.com/tj/assert"
 )
 
 func Test_DecodeProtocol(t *testing.T) {
@@ -36,18 +37,10 @@ func Test_DecodeProtocol(t *testing.T) {
         `)
 	var protocol Protocol
 	err := json.Unmarshal(protocolBytes, &protocol)
-	if err != nil {
-		t.Errorf("Failed to decode json: %v", err)
-	}
-	if protocol.Version != "V3" {
-		t.Errorf("Incorrect protocol version: '%v'", protocol.Version)
-	}
-	if protocol.Environment != "foo" {
-		t.Errorf("Incorrect environment: '%v'", protocol.Environment)
-	}
-	if protocol.Blueprint.Validators[0].Title != "order.spend" {
-		t.Errorf("Incorrect blueprint validator 0")
-	}
+	assert.Nil(t, err, "Failed to decode json")
+	assert.EqualValues(t, "V3", protocol.Version)
+	assert.EqualValues(t, "foo", protocol.Environment)
+	assert.EqualValues(t, "order.spend", protocol.Blueprint.Validators[0].Title)
 	if !reflect.DeepEqual(protocol.Blueprint.Validators[0].CompiledCode, sundaegql.HexBytes{0, 0, 0}) {
 		t.Errorf("Incorrect blueprint validator 0 code: %x", protocol.Blueprint.Validators[0].CompiledCode)
 	}
@@ -72,14 +65,11 @@ func Test_GetLPToken(t *testing.T) {
 
 	var v1Protocol Protocol
 	v1Err := json.Unmarshal(v1ProtocolBytes, &v1Protocol)
-	if v1Err != nil {
-		t.Errorf("Failed to decode json: %v", v1Err)
-	}
+	assert.Nil(t, v1Err)
 
-	v1LpId := v1Protocol.GetLPToken("00")
-	if v1LpId != "4086577ed57c514f8e29b78f42ef4f379363355a3b65b9a032ee30c9.6c702000" {
-		t.Errorf("Incorrect LP Token returned: %v", v1LpId)
-	}
+	v1LpId, err := v1Protocol.GetLPAsset("00")
+	assert.Nil(t, err)
+	assert.EqualValues(t, "4086577ed57c514f8e29b78f42ef4f379363355a3b65b9a032ee30c9.6c702000", v1LpId)
 
 	v3ProtocolBytes := []byte(`
 	{
@@ -101,13 +91,9 @@ func Test_GetLPToken(t *testing.T) {
 
 	var v3Protocol Protocol
 	v3Err := json.Unmarshal(v3ProtocolBytes, &v3Protocol)
+	assert.Nil(t, v3Err)
 
-	if v3Err != nil {
-		t.Errorf("Failed to decode json: %v", v3Err)
-	}
-
-	v3LpId := v3Protocol.GetLPToken("1750b21414d4198763ee4d442f5c03a295a13a6028def9be4a785463")
-	if v3LpId != "633a136877ed6ad0ab33e69a22611319673474c8bd0a79a4c76d9289.6c70201750b21414d4198763ee4d442f5c03a295a13a6028def9be4a785463" {
-		t.Errorf("Incorrect LP Token returned: %v", v3LpId)
-	}
+	v3LpId, err := v3Protocol.GetLPAsset("1750b21414d4198763ee4d442f5c03a295a13a6028def9be4a785463")
+	assert.Nil(t, err)
+	assert.EqualValues(t, "633a136877ed6ad0ab33e69a22611319673474c8bd0a79a4c76d9289.6c70201750b21414d4198763ee4d442f5c03a295a13a6028def9be4a785463", v3LpId)
 }

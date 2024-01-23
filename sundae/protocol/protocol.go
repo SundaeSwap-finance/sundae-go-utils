@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/shared"
 	sundaegql "github.com/SundaeSwap-finance/sundae-go-utils/sundae-gql"
@@ -101,6 +102,88 @@ func (v Validator) IsPaymentCredentialOf(address string) bool {
 	return bytes.Equal(payment, v.Hash)
 }
 
+func (p Protocol) GetPoolNFT(ident string) (shared.AssetID, error) {
+	poolScript, ok := p.Blueprint.Find("pool.mint")
+	if !ok {
+		return "", fmt.Errorf("pool.mint not found in protocol: %v", p.Version)
+	}
+	poolScriptHash := hex.EncodeToString(poolScript.Hash)
+	switch p.Version {
+	case V1:
+		return shared.FromSeparate(poolScriptHash, V1PoolNFTHexPrefix+ident), nil
+	case V3:
+		return shared.FromSeparate(poolScriptHash, V3PoolNFTHexPrefix+ident), nil
+	default:
+		return "", fmt.Errorf("unrecognized protocol version %v", p.Version)
+	}
+}
+func (p Protocol) MustGetPoolNFT(ident string) shared.AssetID {
+	assetId, err := p.GetPoolNFT(ident)
+	if err != nil {
+		panic(err)
+	}
+	return assetId
+}
+
+func (p Protocol) IsPoolNFT(assetId shared.AssetID) (bool, error) {
+	poolMint, ok := p.Blueprint.Find("pool.mint")
+	if !ok {
+		return false, fmt.Errorf("pool.mint not found in protocol %v", p.Version)
+	}
+	if hex.EncodeToString(poolMint.Hash) != assetId.PolicyID() {
+		return false, nil
+	}
+	switch p.Version {
+	case V1:
+		return strings.HasPrefix(assetId.AssetName(), V1PoolNFTHexPrefix), nil
+	case V3:
+		return strings.HasPrefix(assetId.AssetName(), V3PoolNFTHexPrefix), nil
+	default:
+		return false, fmt.Errorf("unrecognized protocol version %v", p.Version)
+	}
+}
+
+func (p Protocol) GetLPAsset(ident string) (shared.AssetID, error) {
+	poolScript, ok := p.Blueprint.Find("pool.mint")
+	if !ok {
+		return "", fmt.Errorf("pool.mint not found in protocol %v", p.Version)
+	}
+	poolScriptHash := hex.EncodeToString(poolScript.Hash)
+	switch p.Version {
+	case V1:
+		return shared.FromSeparate(poolScriptHash, V1LPHexPrefix+ident), nil
+	case V3:
+		return shared.FromSeparate(poolScriptHash, V3LPHexPrefix+ident), nil
+	default:
+		return "", fmt.Errorf("unrecognized protocol version %v", p.Version)
+	}
+}
+func (p Protocol) MustGetLPAsset(ident string) shared.AssetID {
+	assetId, err := p.GetLPAsset(ident)
+	if err != nil {
+		panic(err)
+	}
+	return assetId
+}
+
+func (p Protocol) IsLPAsset(assetId shared.AssetID) (bool, error) {
+	poolMint, ok := p.Blueprint.Find("pool.mint")
+	if !ok {
+		return false, fmt.Errorf("pool.mint not found in protocol %v", p.Version)
+	}
+	if hex.EncodeToString(poolMint.Hash) != assetId.PolicyID() {
+		return false, nil
+	}
+	switch p.Version {
+	case V1:
+		return strings.HasPrefix(assetId.AssetName(), V1LPHexPrefix), nil
+	case V3:
+		return strings.HasPrefix(assetId.AssetName(), V3LPHexPrefix), nil
+	default:
+		return false, fmt.Errorf("unrecognized protocol version %v", p.Version)
+	}
+}
+
 // V1 specific constants
 const V1FactoryNFTHexName = "666163746F7279"
 const V1PoolNFTHexPrefix = "7020"
@@ -138,20 +221,4 @@ func (p *Protocol) GetSettingsScript() ([]byte, error) {
 
 func (p *Protocol) GetStakeScript() ([]byte, error) {
 	return p.getScript(StakeScriptKey)
-}
-
-func (p Protocol) GetLPToken(ident string) shared.AssetID {
-	poolScript, ok := p.Blueprint.Find("pool.mint")
-	if !ok {
-		panic("assumed pool.mint, but not found in protocol")
-	}
-	poolScriptHash := hex.EncodeToString(poolScript.Hash)
-	switch p.Version {
-	case V1:
-		return shared.FromSeparate(poolScriptHash, V1LPHexPrefix+ident)
-	case V3:
-		return shared.FromSeparate(poolScriptHash, V3LPHexPrefix+ident)
-	default:
-		panic("unrecognized protocol")
-	}
 }
