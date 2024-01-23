@@ -102,7 +102,7 @@ func (h *Handler) Generate(ctx context.Context, _ json.RawMessage) error {
 func GetRawAsOf(ctx context.Context, s3Api s3iface.S3API, bucket, servicename, reportName string, timestamp time.Time) ([]byte, string, error) {
 	count := 0
 	for {
-		prefix := fmt.Sprintf("%v/%v/%v", servicename, reportName, timestamp.Format("2006-01-02"))
+		prefix := fmt.Sprintf("%v/%v/%v/%v", servicename, reportName, timestamp.Format("2006-01-02"), timestamp.Hour())
 		listInput := s3.ListObjectsV2Input{
 			Bucket:  aws.String(bucket),
 			MaxKeys: aws.Int64(1000),
@@ -114,8 +114,8 @@ func GetRawAsOf(ctx context.Context, s3Api s3iface.S3API, bucket, servicename, r
 		}
 
 		if len(listOutput.Contents) == 0 {
-			yesterday := timestamp.AddDate(0, 0, -1)
-			timestamp = time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 23, 59, 59, 0, time.UTC)
+			before := timestamp.Add(-time.Hour)
+			timestamp = time.Date(before.Year(), before.Month(), before.Day(), before.Hour(), 59, 59, 0, time.UTC)
 			if count > 5 {
 				return nil, "", fmt.Errorf("failed to find latest report after 5 days: %v", timestamp)
 			}
