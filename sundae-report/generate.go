@@ -101,23 +101,24 @@ func (h *Handler) Generate(ctx context.Context, _ json.RawMessage) error {
 
 func GetRawAsOf(ctx context.Context, s3Api s3iface.S3API, bucket, servicename, reportName string, timestamp time.Time) ([]byte, string, error) {
 	count := 0
+	currentTimestamp := timestamp
 	for {
-		prefix := fmt.Sprintf("%v/%v/%v/%v", servicename, reportName, timestamp.Format("2006-01-02"), timestamp.Hour())
+		prefix := fmt.Sprintf("%v/%v/%v/%v", servicename, reportName, currentTimestamp.Format("2006-01-02"), currentTimestamp.Format("15"))
 		listInput := s3.ListObjectsV2Input{
 			Bucket:  aws.String(bucket),
 			MaxKeys: aws.Int64(1000),
 			Prefix:  aws.String(prefix),
 		}
+		fmt.Printf("Attempting prefix %v\n", prefix)
 		listOutput, err := s3Api.ListObjectsV2WithContext(ctx, &listInput)
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to read most recent exchange-feed: failed to list objects: %w", err)
 		}
 
 		if len(listOutput.Contents) == 0 {
-			before := timestamp.Add(-time.Hour)
-			timestamp = time.Date(before.Year(), before.Month(), before.Day(), before.Hour(), 59, 59, 0, time.UTC)
-			if count > 5 {
-				return nil, "", fmt.Errorf("failed to find latest report after 5 days: %v", timestamp)
+			currentTimestamp = currentTimestamp.Add(-time.Hour)
+			if count > 24 {
+				return nil, "", fmt.Errorf("failed to find latest report in the last 24 hours. final timestamp: %v", currentTimestamp)
 			}
 			count += 1
 			continue
@@ -128,7 +129,16 @@ func GetRawAsOf(ctx context.Context, s3Api s3iface.S3API, bucket, servicename, r
 			return aws.StringValue(listOutput.Contents[i].Key) > aws.StringValue(listOutput.Contents[j].Key)
 		})
 
-		firstKey := listOutput.Contents[0].Key
+		var firstKey *string
+		for _, obj := range listOutput.Contents {
+			if aws.StringValue(obj.Key) > ReportKey(servicename, reportName, timestamp) {
+				continue
+			}
+			firstKey = obj.Key
+		}
+		if firstKey == nil {
+			return nil, "", fmt.Errorf("pnly found reports after timestamp %v", timestamp)
+		}
 
 		input := s3.GetObjectInput{
 			Bucket: aws.String(bucket),
