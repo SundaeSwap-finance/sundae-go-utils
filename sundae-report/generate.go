@@ -109,7 +109,6 @@ func GetRawAsOf(ctx context.Context, s3Api s3iface.S3API, bucket, servicename, r
 			MaxKeys: aws.Int64(1000),
 			Prefix:  aws.String(prefix),
 		}
-		fmt.Printf("Attempting prefix %v\n", prefix)
 		listOutput, err := s3Api.ListObjectsV2WithContext(ctx, &listInput)
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to read most recent exchange-feed: failed to list objects: %w", err)
@@ -135,6 +134,7 @@ func GetRawAsOf(ctx context.Context, s3Api s3iface.S3API, bucket, servicename, r
 				continue
 			}
 			firstKey = obj.Key
+			break
 		}
 		if firstKey == nil {
 			return nil, "", fmt.Errorf("pnly found reports after timestamp %v", timestamp)
