@@ -4,11 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/signal"
+	"regexp"
+	"strconv"
+	"strings"
+	"syscall"
 
+	"github.com/SundaeSwap-finance/ogmigo/v6"
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync"
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync/compatibility"
 	"github.com/SundaeSwap-finance/sundae-go-utils/cardano"
 	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
+	"github.com/SundaeSwap-finance/sundae-stats/build/ogmigolog"
 	"github.com/SundaeSwap-finance/sundae-sync/dao/cursordao"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -18,6 +26,8 @@ import (
 	consumer "github.com/harlow/kinesis-consumer"
 	"github.com/rs/zerolog"
 )
+
+const usage = "sundae-kinesis"
 
 type RollForwardBlockCallback func(ctx context.Context, block *chainsync.Block) error
 type RollForwardTxCallback func(ctx context.Context, logger zerolog.Logger, point chainsync.PointStruct, tx chainsync.Tx) error
@@ -77,6 +87,8 @@ func (h *Handler) Start() error {
 	switch {
 	case sundaecli.CommonOpts.Console:
 		return h.handleRealtime()
+	case KinesisOpts.Ogmios != "":
+		return h.replayWithOgmios()
 
 	default:
 		lambda.Start(h.HandleKinesisEvent)
@@ -167,6 +179,55 @@ func (h *Handler) onRollBackward(ctx context.Context, ps *chainsync.PointStruct)
 	}
 }
 
+type Store struct {
+	cursor *cursordao.DAO
+}
+
+func (s *Store) Save(ctx context.Context, point chainsync.Point) error {
+	return nil
+}
+
+func (s *Store) Load(ctx context.Context) (chainsync.Points, error) {
+	fallbackPoints, err := parsePoints(KinesisOpts.Point)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse points: %w", err)
+	}
+
+	ps, err := s.cursor.FindCursor(ctx, cursordao.BlockHighWater, usage)
+	if err != nil {
+		return fallbackPoints, nil
+	}
+
+	return chainsync.Points{ps.Point()}, nil
+}
+
+func wrapCursorDAO(cursor *cursordao.DAO) *Store {
+	return &Store{cursor: cursor}
+}
+
+func parsePoints(pp ...string) ([]chainsync.Point, error) {
+	var (
+		re     = regexp.MustCompile(`^(\d+)/([^/]+)$`)
+		points []chainsync.Point
+	)
+	for _, p := range pp {
+		for _, s := range strings.Split(p, ",") {
+			match := re.FindStringSubmatch(s)
+			if len(match) != 3 {
+				return nil, fmt.Errorf("failed to parse point, %v: expected {slot}/{blockHash}", s)
+			}
+
+			slot, _ := strconv.ParseUint(match[1], 10, 64)
+			point := chainsync.PointStruct{
+				ID:   match[2],
+				Slot: slot,
+			}
+			points = append(points, point.Point())
+		}
+	}
+
+	return points, nil
+}
 func (h *Handler) handleRealtime() error {
 	streamName := KinesisOpts.StreamName
 	if streamName == "" {
@@ -197,4 +258,84 @@ func (h *Handler) handleRealtime() error {
 	}
 	fmt.Println("Listening...")
 	return c.Scan(ctx, callback)
+}
+
+func (h *Handler) replayWithOgmios() error {
+	ctx := h.logger.WithContext(context.Background())
+	ogmigoClient := ogmigo.New(
+		ogmigo.WithPipeline(50),
+		ogmigo.WithInterval(1000),
+		ogmigo.WithEndpoint(KinesisOpts.Ogmios),
+		ogmigo.WithLogger(ogmigolog.Wrap(h.logger)),
+	)
+	h.logger.Info().Msg("connecting to ogmios stream for local replay")
+	var callback ogmigo.ChainSyncFunc = func(ctx context.Context, data []byte) (err error) {
+		defer func() {
+			if err != nil {
+				h.logger.Info().Err(err).Msg("handler failed")
+			}
+		}()
+		var response compatibility.CompatibleResponsePraos
+		if err := json.Unmarshal(data, &response); err != nil {
+			return fmt.Errorf("failed to parse chainsync Response: %w", err)
+		}
+
+		if response.Result == nil {
+			return nil
+		}
+
+		result := compatibility.CompatibleResult{}
+		if r, ok := response.Result.(chainsync.ResultFindIntersectionPraos); ok {
+			c := compatibility.CompatibleResultFindIntersection(r)
+			result.FindIntersection = &c
+		} else if r, ok := response.Result.(chainsync.ResultNextBlockPraos); ok {
+			c := compatibility.CompatibleResultNextBlock(r)
+			result.NextBlock = &c
+		} else {
+			return fmt.Errorf("unexpected result type: %T", response.Result)
+		}
+
+		return h.handleChainsyncResult(ctx, result)
+	}
+	chainSync, err := ogmigoClient.ChainSync(ctx, callback,
+		ogmigo.WithReconnect(true),
+		ogmigo.WithStore(wrapCursorDAO(h.cursor)),
+	)
+	if err != nil {
+		return err
+	}
+	defer chainSync.Close()
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case <-chainSync.Done():
+		h.logger.Info().Msg("chainsync done")
+	case <-ctx.Done():
+		h.logger.Info().Msg("context done")
+	case <-stop:
+		h.logger.Info().Msg("caught SIGINT")
+		return nil
+	}
+
+	return nil
+}
+
+func (h *Handler) handleChainsyncResult(ctx context.Context, result compatibility.CompatibleResult) error {
+	switch {
+	case result.FindIntersection != nil:
+		if ps, ok := result.FindIntersection.Intersection.PointStruct(); ok {
+			return h.onRollBackward(ctx, ps)
+		}
+	case result.NextBlock != nil:
+		if result.NextBlock.Direction == chainsync.RollBackwardString {
+			if ps, ok := result.NextBlock.Point.PointStruct(); ok {
+				return h.onRollBackward(ctx, ps)
+			}
+		} else if result.NextBlock.Direction == chainsync.RollForwardString {
+			return h.onRollForward(ctx, result.NextBlock.Block)
+		}
+	}
+
+	return nil
 }
