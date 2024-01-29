@@ -138,7 +138,7 @@ func (h *Handler) onRollForward(ctx context.Context, block *chainsync.Block) (er
 	}
 	h.logger.Info().Uint64("slot", block.Slot).Time("blockTime", slotTime.Instant).Str("blockHash", block.ID).Msg("Roll forward")
 
-	if !sundaecli.CommonOpts.Dry {
+	if !sundaecli.CommonOpts.Dry && !KinesisOpts.PatchReplay {
 		if err := h.cursor.Save(ctx, block.PointStruct(), h.cursorUsage, block.Transactions...); err != nil {
 			h.logger.Warn().Err(err).Uint64("slot", block.Slot).Msg("failed to save point")
 			return err
@@ -163,7 +163,7 @@ func (h *Handler) onRollForward(ctx context.Context, block *chainsync.Block) (er
 
 func (h *Handler) onRollBackward(ctx context.Context, ps *chainsync.PointStruct) (err error) {
 	h.logger.Info().Uint64("slot", ps.Slot).Str("block", ps.ID).Msg("rolling backward")
-	if sundaecli.CommonOpts.Dry {
+	if sundaecli.CommonOpts.Dry || KinesisOpts.PatchReplay {
 		if h.rollBackward != nil {
 			// TODO?
 			h.rollBackward(ctx, h.logger, 0)
