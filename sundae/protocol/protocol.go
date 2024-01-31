@@ -167,20 +167,31 @@ func (p Protocol) MustGetLPAsset(ident string) shared.AssetID {
 }
 
 func (p Protocol) IsLPAsset(assetId shared.AssetID) (bool, error) {
+	_, ok, err := p.GetIdent(assetId)
+	return ok, err
+}
+
+func (p Protocol) GetIdent(assetId shared.AssetID) (string, bool, error) {
 	poolMint, ok := p.Blueprint.Find("pool.mint")
 	if !ok {
-		return false, fmt.Errorf("pool.mint not found in protocol %v", p.Version)
+		return "", false, fmt.Errorf("pool.mint not found in protocol %v", p.Version)
 	}
 	if hex.EncodeToString(poolMint.Hash) != assetId.PolicyID() {
-		return false, nil
+		return "", false, nil
 	}
 	switch p.Version {
 	case V1:
-		return strings.HasPrefix(assetId.AssetName(), V1LPHexPrefix), nil
+		if !strings.HasPrefix(assetId.AssetName(), V1LPHexPrefix) {
+			return "", false, nil
+		}
+		return strings.TrimPrefix(assetId.AssetName(), V1LPHexPrefix), true, nil
 	case V3:
-		return strings.HasPrefix(assetId.AssetName(), V3LPHexPrefix), nil
+		if !strings.HasPrefix(assetId.AssetName(), V3LPHexPrefix) {
+			return "", false, nil
+		}
+		return strings.TrimPrefix(assetId.AssetName(), V3LPHexPrefix), true, nil
 	default:
-		return false, fmt.Errorf("unrecognized protocol version %v", p.Version)
+		return "", false, fmt.Errorf("unrecognized protocol version %v", p.Version)
 	}
 }
 
