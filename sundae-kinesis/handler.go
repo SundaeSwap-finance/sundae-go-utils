@@ -87,7 +87,8 @@ func (h *Handler) Start() error {
 	switch {
 	case sundaecli.CommonOpts.Console:
 		return h.handleRealtime()
-	case KinesisOpts.Ogmios != "":
+
+	case OgmiosFlag.IsSet():
 		return h.replayWithOgmios()
 
 	default:
