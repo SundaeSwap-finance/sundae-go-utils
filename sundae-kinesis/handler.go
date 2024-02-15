@@ -84,17 +84,15 @@ func (h *Handler) SetCursorUsage(usage string) {
 }
 
 func (h *Handler) Start() error {
-	switch {
-	case sundaecli.CommonOpts.Console:
-		return h.handleRealtime()
-
-	case OgmiosFlag.IsSet():
-		return h.replayWithOgmios()
-
-	default:
+	if !sundaecli.CommonOpts.Console {
 		lambda.Start(h.HandleKinesisEvent)
 	}
-	return nil
+
+	if OgmiosFlag.IsSet() {
+		return h.replayWithOgmios()
+	} else {
+		return h.handleRealtime()
+	}
 }
 
 func (h *Handler) HandleKinesisEvent(ctx context.Context, event events.KinesisEvent) (err error) {
