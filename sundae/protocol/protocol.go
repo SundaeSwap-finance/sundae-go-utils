@@ -196,7 +196,7 @@ func (p Protocol) GetIdent(assetId shared.AssetID) (string, bool, error) {
 }
 
 // V1 specific constants
-const V1FactoryNFTHexName = "666163746F7279"
+const V1FactoryNFTHexName = "666163746f7279"
 const V1PoolNFTHexPrefix = "7020"
 const V1LPHexPrefix = "6c7020"
 
