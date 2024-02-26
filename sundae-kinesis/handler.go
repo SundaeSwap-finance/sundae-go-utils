@@ -25,6 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	consumer "github.com/harlow/kinesis-consumer"
 	"github.com/rs/zerolog"
+	"github.com/urfave/cli/v2"
 )
 
 const usage = "sundae-kinesis"
@@ -83,12 +84,12 @@ func (h *Handler) SetCursorUsage(usage string) {
 	h.cursorUsage = usage
 }
 
-func (h *Handler) Start() error {
+func (h *Handler) Start(ctx *cli.Context) error {
 	if !sundaecli.CommonOpts.Console {
 		lambda.Start(h.HandleKinesisEvent)
 	}
 
-	if OgmiosFlag.IsSet() {
+	if ctx.IsSet(OgmiosFlag.Name) {
 		return h.replayWithOgmios()
 	} else {
 		return h.handleRealtime()
@@ -301,6 +302,7 @@ func (h *Handler) replayWithOgmios() error {
 		ogmigo.WithStore(wrapCursorDAO(h.cursor)),
 	)
 	if err != nil {
+		h.logger.Warn().Err(err).Msg("failed to connect to ogmios")
 		return err
 	}
 	defer chainSync.Close()
@@ -308,6 +310,8 @@ func (h *Handler) replayWithOgmios() error {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	select {
+	case ogmigoErr := <-chainSync.Err():
+		h.logger.Info().Err(ogmigoErr).Msg("chainsync error")
 	case <-chainSync.Done():
 		h.logger.Info().Msg("chainsync done")
 	case <-ctx.Done():
