@@ -75,6 +75,17 @@ func (ps Protocols) IsRelevant(address string) (Protocol, bool, error) {
 	return Protocol{}, false, nil
 }
 
+func (ps Protocols) IsLPAsset(assetId shared.AssetID) (Protocol, bool, error) {
+	for _, p := range ps {
+		if ok, err := p.IsLPAsset(assetId); ok {
+			return p, true, nil
+		} else if err != nil {
+			return Protocol{}, false, err
+		}
+	}
+	return Protocol{}, false, nil
+}
+
 func (b Blueprint) Find(key string) (Validator, bool) {
 	for _, v := range b.Validators {
 		if v.Title == key {
