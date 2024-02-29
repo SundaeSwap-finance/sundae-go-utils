@@ -1,39 +1,32 @@
 package cardano
 
 import (
-	"encoding/hex"
 	"fmt"
 	"strings"
 
 	"github.com/savaki/bech32"
 )
 
-var ErrByronAddress = fmt.Errorf("cannot split byron address")
-
-// A frontend that does validation before attempting a Bech32 decode of an address.
-// There are subtle issues that could cause a panic if the address is not valid.
-// For example, Byron addresses can break savaki's Bech32 library. We don't care
-// about Byron, so we can just filter out non-standardized addresses.
-func Bech32Decode(address string) (hrp string, data []byte, err error) {
-	if strings.HasPrefix(address, "addr") || strings.HasPrefix(address, "stake") {
-		return bech32.Decode(address)
-	} else {
-		return "", nil, fmt.Errorf("invalid address %v", address)
-	}
-}
+var ErrByronAddress = fmt.Errorf("byron addresses have no payment / staking parts")
+var ErrStakeAddress = fmt.Errorf("cannot split a staking address")
 
 func SplitAddress(address string) (paymentCredential, stakingCredential []byte, err error) {
+	// TODO: should we handle stake addresses, and return a nil payment credential?
+	if strings.HasPrefix(address, "stake") {
+		return nil, nil, ErrStakeAddress
+	}
 	if !strings.HasPrefix(address, "addr") {
 		return nil, nil, ErrByronAddress
 	}
-	_, bytes, err := Bech32Decode(address)
+	_, bytes, err := bech32.Decode(address)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to decode address %v: %w", address, err)
-	} else if len(bytes) < 29 {
-		return nil, nil, fmt.Errorf("Bech32 address %v is too short (%v bytes)", hex.EncodeToString(bytes), len(bytes))
+	} else if len(bytes) != 29 && len(bytes) != 57 {
+		// God help us if we ever have to deal with an staking pointer address lol
+		return nil, nil, fmt.Errorf("invalid address: decoded address %v is only %v bytes", address, len(bytes))
 	}
 	paymentBytes := bytes[1:29]
-	stakingBytes := []byte{}
+	var stakingBytes []byte // default to nil if no staking key
 	if len(bytes) == 57 {
 		stakingBytes = bytes[29:]
 	}
