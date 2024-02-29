@@ -62,13 +62,13 @@ func (ps Protocols) Find(version ProtocolVersion) (Protocol, bool) {
 }
 
 func (ps Protocols) IsRelevant(address string) (Protocol, bool, error) {
-	_, bb, err := cardano.Bech32Decode(address)
+	payment, _, err := cardano.SplitAddress(address)
 	if err != nil {
+		if err == cardano.ErrByronAddress || err == cardano.ErrStakeAddress {
+			return Protocol{}, false, nil
+		}
 		return Protocol{}, false, err
-	} else if len(bb) < 29 {
-		return Protocol{}, false, fmt.Errorf("Bech32 address %v is too short (%v bytes)", hex.EncodeToString(bb), len(bb))
 	}
-	payment := bb[1:29]
 	for _, p := range ps {
 		if p.IsRelevant(payment) {
 			return p, true, nil
