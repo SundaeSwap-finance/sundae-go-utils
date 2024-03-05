@@ -9,7 +9,6 @@ import (
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/shared"
 	"github.com/SundaeSwap-finance/sundae-go-utils/cardano"
 	sundaegql "github.com/SundaeSwap-finance/sundae-go-utils/sundae-gql"
-	"github.com/savaki/bech32"
 )
 
 type ProtocolVersion string
@@ -108,11 +107,11 @@ func (p Protocol) IsRelevant(paymentCredential []byte) bool {
 }
 
 func (v Validator) IsPaymentCredentialOf(address string) bool {
-	_, bb, err := bech32.Decode(address)
-	if err != nil || len(bb) < 29 {
+	// Sanity check to prevent things like Byron addresses from being processed.
+	payment, _, err := cardano.SplitAddress(address)
+	if err != nil {
 		return false
 	}
-	payment := bb[1:29]
 	return bytes.Equal(payment, v.Hash)
 }
 
