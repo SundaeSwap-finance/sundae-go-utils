@@ -108,6 +108,12 @@ func (p Protocol) IsRelevant(paymentCredential []byte) bool {
 }
 
 func (v Validator) IsPaymentCredentialOf(address string) bool {
+	// Sanity check to prevent things like Byron addresses from being processed.
+	_, _, err := cardano.SplitAddress(address)
+	if err != nil {
+		return false
+	}
+
 	_, bb, err := bech32.Decode(address)
 	if err != nil || len(bb) < 29 {
 		return false
