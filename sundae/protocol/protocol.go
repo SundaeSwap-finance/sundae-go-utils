@@ -88,6 +88,17 @@ func (ps Protocols) IsLPAsset(assetId shared.AssetID) (Protocol, bool, error) {
 	return Protocol{}, false, nil
 }
 
+func (ps Protocols) PoolIdent(assetId shared.AssetID) (string, bool, Protocol, error) {
+	for _, p := range ps {
+		if ident, ok, err := p.GetIdent(assetId); ok {
+			return ident, true, p, nil
+		} else if err != nil {
+			return "", false, Protocol{}, err
+		}
+	}
+	return "", false, Protocol{}, nil
+}
+
 func (b Blueprint) Find(key string) (Validator, bool) {
 	for _, v := range b.Validators {
 		if v.Title == key {
@@ -180,8 +191,21 @@ func (p Protocol) MustGetLPAsset(ident string) shared.AssetID {
 }
 
 func (p Protocol) IsLPAsset(assetId shared.AssetID) (bool, error) {
-	_, ok, err := p.GetIdent(assetId)
-	return ok, err
+	poolMint, ok := p.Blueprint.Find("pool.mint")
+	if !ok {
+		return false, fmt.Errorf("pool.mint not found in protocol %v", p.Version)
+	}
+	if hex.EncodeToString(poolMint.Hash) != assetId.PolicyID() {
+		return false, nil
+	}
+	switch p.Version {
+	case V1:
+		return strings.HasPrefix(assetId.AssetName(), V1LPHexPrefix), nil
+	case V3:
+		return strings.HasPrefix(assetId.AssetName(), V3LPHexPrefix), nil
+	default:
+		return false, fmt.Errorf("unrecognized protocol version %v", p.Version)
+	}
 }
 
 func (p Protocol) GetIdent(assetId shared.AssetID) (string, bool, error) {
@@ -194,15 +218,23 @@ func (p Protocol) GetIdent(assetId shared.AssetID) (string, bool, error) {
 	}
 	switch p.Version {
 	case V1:
-		if !strings.HasPrefix(assetId.AssetName(), V1LPHexPrefix) {
+		switch {
+		case strings.HasPrefix(assetId.AssetName(), V1PoolNFTHexPrefix):
+			return strings.TrimPrefix(assetId.AssetName(), V1PoolNFTHexPrefix), true, nil
+		case strings.HasPrefix(assetId.AssetName(), V1LPHexPrefix):
+			return strings.TrimPrefix(assetId.AssetName(), V1LPHexPrefix), true, nil
+		default:
 			return "", false, nil
 		}
-		return strings.TrimPrefix(assetId.AssetName(), V1LPHexPrefix), true, nil
 	case V3:
-		if !strings.HasPrefix(assetId.AssetName(), V3LPHexPrefix) {
+		switch {
+		case strings.HasPrefix(assetId.AssetName(), V3PoolNFTHexPrefix):
+			return strings.TrimPrefix(assetId.AssetName(), V3PoolNFTHexPrefix), true, nil
+		case strings.HasPrefix(assetId.AssetName(), V3LPHexPrefix):
+			return strings.TrimPrefix(assetId.AssetName(), V3LPHexPrefix), true, nil
+		default:
 			return "", false, nil
 		}
-		return strings.TrimPrefix(assetId.AssetName(), V3LPHexPrefix), true, nil
 	default:
 		return "", false, fmt.Errorf("unrecognized protocol version %v", p.Version)
 	}

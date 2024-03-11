@@ -11,10 +11,16 @@ var ErrByronAddress = fmt.Errorf("byron addresses have no payment / staking part
 var ErrStakeAddress = fmt.Errorf("cannot split a staking address")
 
 func SplitAddress(address string) (paymentCredential, stakingCredential []byte, err error) {
-	// TODO: should we handle stake addresses, and return a nil payment credential?
 	if strings.HasPrefix(address, "stake") {
-		return nil, nil, ErrStakeAddress
+		_, bytes, err := bech32.Decode(address)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to decode address %v: %w", address, err)
+		} else if len(bytes) != 29 {
+			return nil, nil, fmt.Errorf("invalid address: decoded address %v is only %v bytes", address, len(bytes))
+		}
+		return nil, bytes[1:], nil
 	}
+
 	if !strings.HasPrefix(address, "addr") {
 		return nil, nil, ErrByronAddress
 	}
