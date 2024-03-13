@@ -24,7 +24,7 @@ var ReplayFlag = sundaecli.BoolFlag("replay", "Whether to replay from the beginn
 
 var ReplayFromFlag = cli.TimestampFlag{
 	Name:        "replay-from",
-	Usage:       "Timestamp to replay from",
+	Usage:       "Kinesis ingestion timestamp to replay from",
 	Value:       cli.NewTimestamp(time.Date(2022, 11, 30, 0, 0, 0, 0, time.UTC)),
 	Layout:      "2006-01-02 15:04:05",
 	EnvVars:     []string{"REPLAY_FROM"},
