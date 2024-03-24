@@ -30,6 +30,7 @@ import (
 
 const usage = "sundae-kinesis"
 
+type HandleMessageCallback func(ctx context.Context, record events.KinesisEventRecord) error
 type RollForwardBlockCallback func(ctx context.Context, block *chainsync.Block) error
 type RollForwardTxCallback func(ctx context.Context, logger zerolog.Logger, point chainsync.PointStruct, tx chainsync.Tx) error
 type RollBackwardCallback func(ctx context.Context, logger zerolog.Logger, block uint64, txs ...string) error
@@ -40,9 +41,22 @@ type Handler struct {
 	cursor      *cursordao.DAO
 	cursorUsage string
 
+	handleMessage HandleMessageCallback
+
 	rollForwardBlock RollForwardBlockCallback
 	rollForwardTx    RollForwardTxCallback
 	rollBackward     RollBackwardCallback
+}
+
+func NewGenericHandler(
+	service sundaecli.Service,
+	handleMessage HandleMessageCallback,
+) *Handler {
+	return &Handler{
+		service:       service,
+		logger:        sundaecli.Logger(service),
+		handleMessage: handleMessage,
+	}
 }
 
 func NewHandler(
@@ -106,7 +120,18 @@ func (h *Handler) HandleKinesisEvent(ctx context.Context, event events.KinesisEv
 	return nil
 }
 
+type KinesisSequenceNumberKeyType string
+
+var KinesisSequenceNumberKey = KinesisSequenceNumberKeyType("kinesisSequenceNumber")
+
 func (h *Handler) handleSingleEvent(ctx context.Context, r events.KinesisEventRecord) (err error) {
+	ctx = context.WithValue(ctx, KinesisSequenceNumberKey, r.Kinesis.SequenceNumber)
+
+	// Sometimes we just want full access, but still do the fancy ogmios / kinesis thing
+	if h.handleMessage != nil {
+		return h.handleMessage(ctx, r)
+	}
+
 	var result compatibility.CompatibleResult
 	if err := json.Unmarshal(r.Kinesis.Data, &result); err != nil {
 		return fmt.Errorf("failed to unmarshal kinesis record: %w", err)

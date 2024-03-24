@@ -1,6 +1,8 @@
 module github.com/SundaeSwap-finance/sundae-go-utils
 
-go 1.20
+go 1.21
+
+toolchain go1.21.5
 
 require (
 	github.com/aws/aws-lambda-go v1.41.0
