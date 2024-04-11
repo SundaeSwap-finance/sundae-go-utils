@@ -167,6 +167,20 @@ func (p Protocol) IsPoolNFT(assetId shared.AssetID) (bool, error) {
 	}
 }
 
+func (p Protocol) HasPoolNFT(value shared.Value) (bool, error) {
+	for policyId, assets := range value {
+		for assetName := range assets {
+			assetId := shared.FromSeparate(policyId, assetName)
+			if ok, err := p.IsPoolNFT(assetId); ok {
+				return true, nil
+			} else if err != nil {
+				return false, err
+			}
+		}
+	}
+	return false, nil
+}
+
 func (p Protocol) GetLPAsset(ident string) (shared.AssetID, error) {
 	poolScript, ok := p.Blueprint.Find("pool.mint")
 	if !ok {
