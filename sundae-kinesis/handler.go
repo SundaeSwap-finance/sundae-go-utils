@@ -36,8 +36,8 @@ type RollForwardTxCallback func(ctx context.Context, logger zerolog.Logger, poin
 type RollBackwardCallback func(ctx context.Context, logger zerolog.Logger, block uint64, txs ...string) error
 
 type Handler struct {
-	service     sundaecli.Service
-	logger      zerolog.Logger
+	Service     sundaecli.Service
+	Logger      zerolog.Logger
 	cursor      *cursordao.DAO
 	cursorUsage string
 
@@ -53,8 +53,8 @@ func NewGenericHandler(
 	handleMessage HandleMessageCallback,
 ) *Handler {
 	return &Handler{
-		service:       service,
-		logger:        sundaecli.Logger(service),
+		Service:       service,
+		Logger:        sundaecli.Logger(service),
 		handleMessage: handleMessage,
 	}
 }
@@ -68,8 +68,8 @@ func NewHandler(
 	session := session.Must(session.NewSession(aws.NewConfig()))
 	api := dynamodb.New(session)
 	return &Handler{
-		service:          service,
-		logger:           sundaecli.Logger(service),
+		Service:          service,
+		Logger:           sundaecli.Logger(service),
 		cursor:           cursordao.Build(api, sundaecli.CommonOpts.Env),
 		cursorUsage:      service.Name,
 		rollForwardBlock: rollForwardBlock,
@@ -111,7 +111,7 @@ func (h *Handler) Start(ctx *cli.Context) error {
 }
 
 func (h *Handler) HandleKinesisEvent(ctx context.Context, event events.KinesisEvent) (err error) {
-	ctx = h.logger.WithContext(ctx)
+	ctx = h.Logger.WithContext(ctx)
 	for _, r := range event.Records {
 		if err := h.handleSingleEvent(ctx, r); err != nil {
 			return err
@@ -161,11 +161,11 @@ func (h *Handler) onRollForward(ctx context.Context, block *chainsync.Block) (er
 	if err != nil {
 		return fmt.Errorf("failed to convert slot to datetime: %w", err)
 	}
-	h.logger.Info().Uint64("slot", block.Slot).Time("blockTime", slotTime.Instant).Str("blockHash", block.ID).Msg("Roll forward")
+	h.Logger.Info().Uint64("slot", block.Slot).Time("blockTime", slotTime.Instant).Str("blockHash", block.ID).Msg("Roll forward")
 
 	if !sundaecli.CommonOpts.Dry && !KinesisOpts.PatchReplay {
 		if err := h.cursor.Save(ctx, block.PointStruct(), h.cursorUsage, block.Transactions...); err != nil {
-			h.logger.Warn().Err(err).Uint64("slot", block.Slot).Msg("failed to save point")
+			h.Logger.Warn().Err(err).Uint64("slot", block.Slot).Msg("failed to save point")
 			return err
 		}
 	}
@@ -178,7 +178,7 @@ func (h *Handler) onRollForward(ctx context.Context, block *chainsync.Block) (er
 
 	if h.rollForwardTx != nil {
 		for _, tx := range block.Transactions {
-			if err := h.rollForwardTx(ctx, h.logger, block.PointStruct(), tx); err != nil {
+			if err := h.rollForwardTx(ctx, h.Logger, block.PointStruct(), tx); err != nil {
 				return err
 			}
 		}
@@ -187,17 +187,17 @@ func (h *Handler) onRollForward(ctx context.Context, block *chainsync.Block) (er
 }
 
 func (h *Handler) onRollBackward(ctx context.Context, ps *chainsync.PointStruct) (err error) {
-	h.logger.Info().Uint64("slot", ps.Slot).Str("block", ps.ID).Msg("rolling backward")
+	h.Logger.Info().Uint64("slot", ps.Slot).Str("block", ps.ID).Msg("rolling backward")
 	if sundaecli.CommonOpts.Dry || KinesisOpts.PatchReplay {
 		if h.rollBackward != nil {
 			// TODO?
-			h.rollBackward(ctx, h.logger, 0)
+			h.rollBackward(ctx, h.Logger, 0)
 		}
 		return nil
 	} else {
 		return h.cursor.Rollback(ctx, ps.Slot, h.cursorUsage, func(ctx context.Context, block uint64, txs ...string) error {
 			if h.rollBackward != nil {
-				return h.rollBackward(ctx, h.logger, block, txs...)
+				return h.rollBackward(ctx, h.Logger, block, txs...)
 			}
 			return nil
 		})
@@ -274,7 +274,7 @@ func (h *Handler) handleRealtime() error {
 		return err
 	}
 
-	ctx := h.logger.WithContext(context.Background())
+	ctx := h.Logger.WithContext(context.Background())
 	callback := func(record *consumer.Record) error {
 		er := events.KinesisEventRecord{
 			Kinesis: events.KinesisRecord{Data: record.Data},
@@ -286,18 +286,18 @@ func (h *Handler) handleRealtime() error {
 }
 
 func (h *Handler) replayWithOgmios() error {
-	ctx := h.logger.WithContext(context.Background())
+	ctx := h.Logger.WithContext(context.Background())
 	ogmigoClient := ogmigo.New(
 		ogmigo.WithPipeline(50),
 		ogmigo.WithInterval(1000),
 		ogmigo.WithEndpoint(KinesisOpts.Ogmios),
-		ogmigo.WithLogger(ogmigolog.Wrap(h.logger)),
+		ogmigo.WithLogger(ogmigolog.Wrap(h.Logger)),
 	)
-	h.logger.Info().Msg("connecting to ogmios stream for local replay")
+	h.Logger.Info().Msg("connecting to ogmios stream for local replay")
 	var callback ogmigo.ChainSyncFunc = func(ctx context.Context, data []byte) (err error) {
 		defer func() {
 			if err != nil {
-				h.logger.Info().Err(err).Msg("handler failed")
+				h.Logger.Info().Err(err).Msg("handler failed")
 			}
 		}()
 		var response compatibility.CompatibleResponsePraos
@@ -327,7 +327,7 @@ func (h *Handler) replayWithOgmios() error {
 		ogmigo.WithStore(wrapCursorDAO(h.cursor)),
 	)
 	if err != nil {
-		h.logger.Warn().Err(err).Msg("failed to connect to ogmios")
+		h.Logger.Warn().Err(err).Msg("failed to connect to ogmios")
 		return err
 	}
 	defer chainSync.Close()
@@ -336,13 +336,13 @@ func (h *Handler) replayWithOgmios() error {
 
 	select {
 	case ogmigoErr := <-chainSync.Err():
-		h.logger.Info().Err(ogmigoErr).Msg("chainsync error")
+		h.Logger.Info().Err(ogmigoErr).Msg("chainsync error")
 	case <-chainSync.Done():
-		h.logger.Info().Msg("chainsync done")
+		h.Logger.Info().Msg("chainsync done")
 	case <-ctx.Done():
-		h.logger.Info().Msg("context done")
+		h.Logger.Info().Msg("context done")
 	case <-stop:
-		h.logger.Info().Msg("caught SIGINT")
+		h.Logger.Info().Msg("caught SIGINT")
 		return nil
 	}
 

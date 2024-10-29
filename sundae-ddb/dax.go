@@ -6,11 +6,28 @@ import (
 	"github.com/aws/aws-dax-go/dax"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 )
 
 type DAXWrapper struct {
 	*dax.Dax
+}
+
+func DynamoDBAPI(s *session.Session) (dynamodbiface.DynamoDBAPI, error) {
+	if DDBOpts.DAXCluster != "" {
+		config := dax.DefaultConfig()
+		config.HostPorts = []string{DDBOpts.DAXCluster}
+		config.Region = "us-east-2"
+		daxClient, err := dax.New(config)
+		if err != nil {
+			return nil, err
+		}
+		return DAXWrapper{Dax: daxClient}, nil
+	} else {
+		return dynamodb.New(s), nil
+	}
 }
 
 // These methods aren't implemented by the DAX library, meaning we can't use it as dynamodbiface

@@ -6,11 +6,14 @@ import (
 )
 
 var DDBOpts struct {
-	TableName string
+	DAXCluster string
+	TableName  string
 }
 
+var DAXClusterFlag = sundaecli.StringFlag("dax-cluster", "The DAX cluster to connect to", &DDBOpts.DAXCluster)
 var TableNameFlag = sundaecli.StringFlag("table-name", "The table name to read streams from", &DDBOpts.TableName)
 
 var DDBFlags = []cli.Flag{
+	DAXClusterFlag,
 	TableNameFlag,
 }
