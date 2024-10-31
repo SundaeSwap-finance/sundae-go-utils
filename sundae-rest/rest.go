@@ -14,14 +14,18 @@ import (
 	"github.com/savaki/apigateway"
 )
 
-func Webserver(service sundaecli.Service, routes chi.Router) error {
-	logger := sundaecli.Logger(service)
+func Middlewares(service sundaecli.Service, routes chi.Router) chi.Router {
 	routes.Use(
 		withEmbedPolicyHeaders,
 		withCORS(),
-		withLogger(logger),
+		withLogger(sundaecli.Logger(service)),
 		middleware.Recoverer,
 	)
+	return routes
+}
+
+func Webserver(service sundaecli.Service, routes chi.Router) error {
+	logger := sundaecli.Logger(service)
 
 	if sundaecli.CommonOpts.Console {
 		logger.Info().Int("port", sundaecli.CommonOpts.Port).Msg("starting http server")
