@@ -27,10 +27,11 @@ func SplitAddress(address string) (paymentCredential, stakingCredential []byte, 
 	_, bytes, err := bech32.Decode(address)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to decode address %v: %w", address, err)
-	} else if len(bytes) != 29 && len(bytes) != 57 {
-		// God help us if we ever have to deal with an staking pointer address lol
+	} else if len(bytes) != 29 && len(bytes) != 35 && len(bytes) != 57 {
 		return nil, nil, fmt.Errorf("invalid address: decoded address %v is only %v bytes", address, len(bytes))
 	}
+	// Note: if it's 35 bytes, it's a pointer address; we just assume this has no staking address attached
+	// They're disallowed in modern eras, and in historical replays they were never relevant
 	paymentBytes := bytes[1:29]
 	var stakingBytes []byte // default to nil if no staking key
 	if len(bytes) == 57 {
