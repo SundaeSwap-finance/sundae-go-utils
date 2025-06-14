@@ -11,8 +11,12 @@ type DateTime struct {
 	Instant time.Time
 }
 
-func (d DateTime) Unix() int64 {
+func (d DateTime) UnixInt() int64 {
 	return d.Instant.Unix()
+}
+
+func (d DateTime) Unix() string {
+	return fmt.Sprintf("%d", d.Instant.Unix())
 }
 
 func (d DateTime) Slot() (int32, error) {
