@@ -19,6 +19,14 @@ func (d DateTime) Unix() string {
 	return fmt.Sprintf("%d", d.Instant.Unix())
 }
 
+func (d DateTime) UnixMilliInt() int64 {
+	return d.Instant.UnixMilli()
+}
+
+func (d DateTime) UnixMilli() string {
+	return fmt.Sprintf("%d", d.Instant.UnixMilli())
+}
+
 func (d DateTime) Slot() (int32, error) {
 	s, err := TimeToSlotEnv(d.Instant, "")
 	return int32(s), err
