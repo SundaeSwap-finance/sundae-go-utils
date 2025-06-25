@@ -79,7 +79,7 @@
       };
 
       const fetcher = createGraphiQLFetcher({
-        url: 'https://countries.trevorblades.com',
+        url: '{{.Route}}',
       });
       const plugins = [HISTORY_PLUGIN, explorerPlugin()];
 
