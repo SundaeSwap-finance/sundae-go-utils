@@ -50,7 +50,7 @@ func EnvToSlotOffset(env string) (uint64, error) {
 	switch env {
 	case "preview":
 		return SlotOffsetPreview, nil
-	case "mainnet":
+	case "mainnet", "cardano-tom": // This is a bit messy, we should unravel this at some point; chain and environment should be separate
 		return SlotOffsetMainnet, nil
 	default:
 		if sundaecli.CommonOpts.SlotOffset != 0 {
@@ -92,7 +92,7 @@ func TimeToSlotEnv(time time.Time, env string) (uint64, error) {
 	switch env {
 	case "preview":
 		return TimeToSlot(time, SlotOffsetPreview), nil
-	case "mainnet":
+	case "mainnet", "cardano-tom": // This is a bit messy, we should unravel this at some point; chain and environment should be separate
 		return TimeToSlot(time, SlotOffsetMainnet), nil
 	default:
 		return 0, fmt.Errorf("unrecognized environment %v", env)
