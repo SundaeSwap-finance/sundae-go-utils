@@ -15,11 +15,13 @@ require (
 )
 
 require (
+	github.com/SundaeSwap-finance/ogmigo v0.10.0
 	github.com/SundaeSwap-finance/ogmigo/v6 v6.0.0-20240830005511-f73d0e16424b
 	github.com/SundaeSwap-finance/sundae-stats v0.0.0-20250709193300-b166a7f84418
 	github.com/SundaeSwap-finance/sundae-sync v0.0.0-20231129062440-e3d0c42ddb69
 	github.com/aws/aws-dax-go v1.2.14
 	github.com/aws/aws-sdk-go v1.52.6
+	github.com/blinklabs-io/gouroboros v0.132.0
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/harlow/kinesis-consumer v0.3.5
 	github.com/savaki/bech32 v0.0.0-20220223220548-20f899656a90
@@ -37,10 +39,8 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/SundaeSwap-finance/ogmigo v0.10.0 // indirect
 	github.com/antlr/antlr4 v0.0.0-20181218183524-be58ebffde8e // indirect
 	github.com/awslabs/kinesis-aggregation/go v0.0.0-20220610150308-f265332d248d // indirect
-	github.com/blinklabs-io/gouroboros v0.132.0 // indirect
 	github.com/blinklabs-io/plutigo v0.0.6 // indirect
 	github.com/btcsuite/btcd/btcutil v1.1.6 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
