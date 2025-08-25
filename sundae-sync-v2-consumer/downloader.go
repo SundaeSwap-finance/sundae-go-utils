@@ -27,7 +27,6 @@ type S3Downloader struct {
 func (h *S3Downloader) DownloadBlockSync(hash []byte) ([]byte, error) {
 	prefix := fmt.Sprintf("%02x", hash[0])
 	filename := fmt.Sprintf("blocks/by-hash/%v/%v.cbor", prefix, hex.EncodeToString(hash))
-	h.Logger.Trace().Str("filename", filename).Msg("Downloading block")
 	resp, err := h.S3.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(fmt.Sprintf("%v-sundae-sync-v2-%v-us-east-2", h.Env, h.Account)),
 		Key:    aws.String(filename),

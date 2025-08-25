@@ -4,9 +4,14 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"os"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/blinklabs-io/gouroboros/ledger"
 	consumer "github.com/harlow/kinesis-consumer"
@@ -18,11 +23,23 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-type ConsumerOpts struct {
+var SyncV2ConsumerOpts struct {
 	Transaction string
 	Stream      string
 	Account     string
 	Timestamp   cli.Timestamp
+}
+
+var TransactionFlag = sundaecli.StringFlag("transaction", "Replay just one transaction", &SyncV2ConsumerOpts.Transaction)
+var StreamFlag = sundaecli.StringFlag("kinesis-stream", "The stream name or arn to connect to", &SyncV2ConsumerOpts.Stream)
+var AccountFlag = sundaecli.StringFlag("aws-account", "The AWS Account number, for interpolating S3 buckets", &SyncV2ConsumerOpts.Account)
+var TsFlag = sundaecli.TimestampFlag("kinesis-timestamp", "2006-01-02 15:04:05", "The timestamp to start syncing from", &SyncV2ConsumerOpts.Timestamp)
+
+var CommonFlags = []cli.Flag{
+	TransactionFlag,
+	StreamFlag,
+	AccountFlag,
+	TsFlag,
 }
 
 type SyncV2Consumer struct {
@@ -31,17 +48,40 @@ type SyncV2Consumer struct {
 	Tx      *txdao.DAO
 	Undo    UndoFunc
 	Advance AdvanceFunc
-	Opts    ConsumerOpts
 }
 
-func (h *SyncV2Consumer) Action(c *cli.Context) error {
+func New(advance AdvanceFunc, undo UndoFunc, logger *zerolog.Logger) SyncV2Consumer {
+	var (
+		s   = session.Must(session.NewSession(aws.NewConfig()))
+		s3  = s3.New(s)
+		db  = dynamodb.New(s)
+		txs = txdao.Build(db)
+	)
+
+	if logger == nil {
+		newLogger := zerolog.New(os.Stdout)
+		logger = &newLogger
+	}
+
+	var consumer SyncV2Consumer = SyncV2Consumer{
+		Logger:  *logger,
+		S3:      s3,
+		Tx:      txs,
+		Undo:    undo,
+		Advance: advance,
+	}
+
+	return consumer
+}
+
+func (h *SyncV2Consumer) Start(c *cli.Context) error {
 	if !sundaecli.CommonOpts.Console {
 		h.Logger.Info().Msg("Starting lambda handler")
 		return h.StartLambda(c)
-	} else if h.Opts.Stream != "" {
+	} else if SyncV2ConsumerOpts.Stream != "" {
 		h.Logger.Info().Msg("Starting kinesis handler")
 		return h.StartKinesis(c)
-	} else if h.Opts.Transaction != "" {
+	} else if SyncV2ConsumerOpts.Transaction != "" {
 		h.Logger.Info().Msg("Replaying specific transaction")
 		return h.RunOne(c)
 	} else {
@@ -58,7 +98,7 @@ func (h *SyncV2Consumer) StartLambda(c *cli.Context) error {
 		Logger:  h.Logger,
 		S3:      h.S3,
 		Env:     sundaecli.CommonOpts.Env,
-		Account: h.Opts.Account,
+		Account: SyncV2ConsumerOpts.Account,
 	}
 	syncer := Syncer{
 		Logger:     h.Logger,
@@ -88,7 +128,7 @@ func (h *SyncV2Consumer) StartLambda(c *cli.Context) error {
 
 func (h *SyncV2Consumer) StartKinesis(c *cli.Context) error {
 	var options []consumer.Option
-	ts := h.Opts.Timestamp.Value()
+	ts := SyncV2ConsumerOpts.Timestamp.Value()
 	if ts == nil {
 		h.Logger.Info().Msg("Starting at latest message")
 		options = append(options, consumer.WithShardIteratorType("LATEST"))
@@ -96,7 +136,7 @@ func (h *SyncV2Consumer) StartKinesis(c *cli.Context) error {
 		h.Logger.Info().Str("timestamp", ts.Format("2006-01-02 15:04:05")).Msg("Starting at timestamp")
 		options = append(options, consumer.WithShardIteratorType("AT_TIMESTAMP"), consumer.WithTimestamp(*ts))
 	}
-	k, err := consumer.New(h.Opts.Stream, options...)
+	k, err := consumer.New(SyncV2ConsumerOpts.Stream, options...)
 	if err != nil {
 		return err
 	}
@@ -108,7 +148,7 @@ func (h *SyncV2Consumer) StartKinesis(c *cli.Context) error {
 		Logger:  h.Logger,
 		S3:      h.S3,
 		Env:     sundaecli.CommonOpts.Env,
-		Account: h.Opts.Account,
+		Account: SyncV2ConsumerOpts.Account,
 	}
 	syncer := Syncer{
 		Logger:     h.Logger,
@@ -139,10 +179,10 @@ func (h *SyncV2Consumer) RunOne(c *cli.Context) error {
 		Logger:  h.Logger,
 		S3:      h.S3,
 		Env:     sundaecli.CommonOpts.Env,
-		Account: h.Opts.Account,
+		Account: SyncV2ConsumerOpts.Account,
 	}
 
-	tx, err := h.Tx.Get(ctx, h.Opts.Transaction)
+	tx, err := h.Tx.Get(ctx, SyncV2ConsumerOpts.Transaction)
 	if err != nil {
 		return fmt.Errorf("transaction not found: %w", err)
 	}
@@ -162,7 +202,7 @@ func (h *SyncV2Consumer) RunOne(c *cli.Context) error {
 
 	found := false
 	for idx, tx := range block.Transactions() {
-		if tx.Hash().String() == h.Opts.Transaction {
+		if tx.Hash().String() == SyncV2ConsumerOpts.Transaction {
 			found = true
 			if err := h.Advance(ctx, tx, int(block.SlotNumber()), idx); err != nil {
 				return fmt.Errorf("failed to advance tx: %w", err)
@@ -171,7 +211,7 @@ func (h *SyncV2Consumer) RunOne(c *cli.Context) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("unable to find transaction %v in block %v", h.Opts.Transaction, tx.Block)
+		return fmt.Errorf("unable to find transaction %v in block %v", SyncV2ConsumerOpts.Transaction, tx.Block)
 	}
 	return nil
 }
