@@ -36,14 +36,15 @@ type AdvanceFunc func(ctx context.Context, tx ledger.Transaction, slot int, txIn
 
 func (h *Syncer) SpawnSyncFunc(group *errgroup.Group, ctx context.Context, undoFunc UndoFunc, advanceFunc AdvanceFunc) {
 	group.Go(func() (err error) {
-		defer func() {
-			if err := recover(); err != nil {
-				h.Logger.Error().Any("err", err).Msg("panic while processing blocks, aborting")
-				err = fmt.Errorf("panic while processing bblocks, aborting: %v", err)
-			}
-		}()
 		// For every event we receive
 		for event := range h.Events {
+			defer func() {
+				if errr := recover(); errr != nil {
+					h.Logger.Error().Any("err", errr).Msg("panic while processing blocks, aborting")
+					err = fmt.Errorf("panic while processing blocks, aborting: %v", errr)
+					event.Finished <- err
+				}
+			}()
 			// First apply each undo
 			for _, undo := range event.Undo {
 				// Wait for the contents of the block

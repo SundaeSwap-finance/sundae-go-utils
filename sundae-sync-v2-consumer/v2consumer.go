@@ -165,7 +165,6 @@ func (h *SyncV2Consumer) StartKinesis(c *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("failure reading from kinesis: %w", err)
 	}
-
 	if err := group.Wait(); err != nil {
 		return fmt.Errorf("failure processing events: %w", err)
 	}
