@@ -39,9 +39,9 @@ func (h *Syncer) SpawnSyncFunc(group *errgroup.Group, ctx context.Context, undoF
 		// For every event we receive
 		for event := range h.Events {
 			defer func() {
-				if errr := recover(); errr != nil {
-					h.Logger.Error().Any("err", errr).Msg("panic while processing blocks, aborting")
-					err = fmt.Errorf("panic while processing blocks, aborting: %v", errr)
+				if panicCause := recover(); panicCause != nil {
+					h.Logger.Error().Any("panicCause", panicCause).Msg("panic while processing blocks, aborting")
+					err = fmt.Errorf("panic while processing blocks, aborting: %v", panicCause)
 					event.Finished <- err
 				}
 			}()
