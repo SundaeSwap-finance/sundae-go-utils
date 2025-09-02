@@ -14,8 +14,9 @@ import (
 type ProtocolVersion string
 
 var (
-	V1 ProtocolVersion = "V1"
-	V3 ProtocolVersion = "V3"
+	V1          ProtocolVersion = "V1"
+	V3          ProtocolVersion = "V3"
+	Stableswaps ProtocolVersion = "Stableswaps"
 )
 
 // TODO: ogmigo type?
