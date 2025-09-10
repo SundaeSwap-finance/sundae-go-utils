@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync"
+	"github.com/SundaeSwap-finance/ogmigo/ouroboros/chainsync"
 	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
 	sundaekinesis "github.com/SundaeSwap-finance/sundae-go-utils/sundae-kinesis"
 	"github.com/rs/zerolog"

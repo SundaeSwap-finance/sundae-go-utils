@@ -11,9 +11,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/SundaeSwap-finance/ogmigo/v6"
-	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync"
-	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync/compatibility"
+	"github.com/SundaeSwap-finance/ogmigo"
+	"github.com/SundaeSwap-finance/ogmigo/ouroboros/chainsync"
 	"github.com/SundaeSwap-finance/sundae-go-utils/cardano"
 	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
 	"github.com/SundaeSwap-finance/sundae-stats/build/ogmigolog"
@@ -124,6 +123,11 @@ type KinesisSequenceNumberKeyType string
 
 var KinesisSequenceNumberKey = KinesisSequenceNumberKeyType("kinesisSequenceNumber")
 
+type compatibleResult struct {
+	NextBlock        *chainsync.ResultNextBlockPraos
+	FindIntersection *chainsync.ResultFindIntersectionPraos
+}
+
 func (h *Handler) handleSingleEvent(ctx context.Context, r events.KinesisEventRecord) (err error) {
 	ctx = context.WithValue(ctx, KinesisSequenceNumberKey, r.Kinesis.SequenceNumber)
 
@@ -132,7 +136,7 @@ func (h *Handler) handleSingleEvent(ctx context.Context, r events.KinesisEventRe
 		return h.handleMessage(ctx, r)
 	}
 
-	var result compatibility.CompatibleResult
+	var result compatibleResult
 	if err := json.Unmarshal(r.Kinesis.Data, &result); err != nil {
 		return fmt.Errorf("failed to unmarshal kinesis record: %w", err)
 	}
@@ -300,7 +304,7 @@ func (h *Handler) replayWithOgmios() error {
 				h.Logger.Info().Err(err).Msg("handler failed")
 			}
 		}()
-		var response compatibility.CompatibleResponsePraos
+		var response chainsync.ResponsePraos
 		if err := json.Unmarshal(data, &response); err != nil {
 			return fmt.Errorf("failed to parse chainsync Response: %w", err)
 		}
@@ -309,12 +313,12 @@ func (h *Handler) replayWithOgmios() error {
 			return nil
 		}
 
-		result := compatibility.CompatibleResult{}
+		result := compatibleResult{}
 		if r, ok := response.Result.(chainsync.ResultFindIntersectionPraos); ok {
-			c := compatibility.CompatibleResultFindIntersection(r)
+			c := chainsync.ResultFindIntersectionPraos(r)
 			result.FindIntersection = &c
 		} else if r, ok := response.Result.(chainsync.ResultNextBlockPraos); ok {
-			c := compatibility.CompatibleResultNextBlock(r)
+			c := chainsync.ResultNextBlockPraos(r)
 			result.NextBlock = &c
 		} else {
 			return fmt.Errorf("unexpected result type: %T", response.Result)

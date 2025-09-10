@@ -11,10 +11,14 @@ github.com/SundaeSwap-finance/ogmigo v0.10.0 h1:vADmZtMZna0dBHK4FEWMpjP3sh0Xla6I
 github.com/SundaeSwap-finance/ogmigo v0.10.0/go.mod h1:snL4kMjA9fBKQek2Dt4cfV9yGBVxGSstFL6tg4ckoNA=
 github.com/SundaeSwap-finance/ogmigo/v6 v6.0.0-20240830005511-f73d0e16424b h1:DvrjaBlBr235jF8lp7WErLWlmyoxXfW+txkdYyNI+mo=
 github.com/SundaeSwap-finance/ogmigo/v6 v6.0.0-20240830005511-f73d0e16424b/go.mod h1:CsDGcgbkKoz6S4h0RJ30go7oXG+KhGE2KLhBpRFnEqA=
+github.com/SundaeSwap-finance/sundae-admin v0.0.0-20231129062030-0413fedc5bb6 h1:fk4UdW9DFkGoK0++pyM0Jxupqq08SVwIplrFdrloWdg=
+github.com/SundaeSwap-finance/sundae-admin v0.0.0-20231129062030-0413fedc5bb6/go.mod h1:77WsUaqe7Sa/RRGlswxgu4BVlGh9a0Sz4ChtMalCoVM=
 github.com/SundaeSwap-finance/sundae-stats v0.0.0-20250709193300-b166a7f84418 h1:vaMIYxu2Ah+Jpy67p4uMK6Cs/Ny99Z2WdBNUjkp9OXM=
 github.com/SundaeSwap-finance/sundae-stats v0.0.0-20250709193300-b166a7f84418/go.mod h1:kwBtDZezoyjdYiQOwQJl2GBBP3rBzue02kidc3zKNkw=
 github.com/SundaeSwap-finance/sundae-sync v0.0.0-20231129062440-e3d0c42ddb69 h1:5SFZ4lOwKJpc8O+3f1sepTt2XYyLIC621lPCKK2S4xM=
 github.com/SundaeSwap-finance/sundae-sync v0.0.0-20231129062440-e3d0c42ddb69/go.mod h1:VVZ+eal1+KWo33+XHY/UiRBKZ0+SQebQOrINh0To+vQ=
+github.com/SundaeSwap-finance/sundae-sync v0.0.0-20250910115644-fd447850bba8 h1:i5gmlw1L7cAmTxlCbX4+DIYbuUikLkdBIHwh5DmaNGM=
+github.com/SundaeSwap-finance/sundae-sync v0.0.0-20250910115644-fd447850bba8/go.mod h1:Hh/TebQA5cQoS8olB3EiGJiJgqEnmGLu6l2El7PQuvg=
 github.com/aead/siphash v1.0.1/go.mod h1:Nywa3cDsYNNK3gaciGTWPwHt0wlpNV15vwmswBAUSII=
 github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a/go.mod h1:SGnFV6hVsYE877CKEZ6tDNTjaSXYUk6QqoIK6PrAtcc=
 github.com/alicebob/miniredis v2.5.0+incompatible/go.mod h1:8HZjEj4yU0dwhYHky+DxYx+6BMjkBbe5ONFIF1MXffk=
