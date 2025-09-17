@@ -1,8 +1,8 @@
 package txdao
 
 import (
-	"github.com/SundaeSwap-finance/ogmigo/ouroboros/chainsync/num"
-	"github.com/SundaeSwap-finance/ogmigo/ouroboros/shared"
+	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync/num"
+	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/shared"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
