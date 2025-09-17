@@ -300,7 +300,7 @@ func (h *Handler) replayWithOgmios() error {
 				h.Logger.Info().Err(err).Msg("handler failed")
 			}
 		}()
-		var response chainsync.ResponsePraos
+		var response compatibility.CompatibleResponsePraos
 		if err := json.Unmarshal(data, &response); err != nil {
 			return fmt.Errorf("failed to parse chainsync Response: %w", err)
 		}
