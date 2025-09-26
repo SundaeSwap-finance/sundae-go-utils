@@ -10,6 +10,10 @@ import (
 var ErrByronAddress = fmt.Errorf("byron addresses have no payment / staking parts")
 var ErrStakeAddress = fmt.Errorf("cannot split a staking address")
 
+/* The functions below use the shelly address headers as defined here:
+ * https://cips.cardano.org/cip/CIP-19#shelley-addresses
+ */
+
 func hasStakeAddress(bytes []byte) bool {
 	if len(bytes) != 57 {
 		return false
