@@ -29,10 +29,10 @@ func main() {
 	}
 }
 
-func action(_ *cli.Context) error {
+func action(ctx *cli.Context) error {
 	handler := sundaekinesis.NewTxHandler(service, rollForwardTx, rollBackward)
 
-	return handler.Start()
+	return handler.Start(ctx)
 }
 
 func rollForwardTx(ctx context.Context, logger zerolog.Logger, point chainsync.PointStruct, tx chainsync.Tx) error {
