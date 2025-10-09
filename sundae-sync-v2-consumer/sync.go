@@ -63,7 +63,7 @@ func (h *Syncer) SpawnSyncFunc(group *errgroup.Group, ctx context.Context, undoF
 				slices.Reverse(txs)
 				for _, tx := range txs {
 					// And invoke the undo logic
-					if err := undoFunc(ctx, tx, uint64(block.SlotNumber())); err != nil {
+					if err := undoFunc(ctx, tx, block.SlotNumber()); err != nil {
 						h.Logger.Warn().Str("blockHash", hex.EncodeToString(undo.Hash)).Err(err).Msg("Error executing undo logic for transaction")
 						event.Finished <- err
 						return err
@@ -83,7 +83,7 @@ func (h *Syncer) SpawnSyncFunc(group *errgroup.Group, ctx context.Context, undoF
 			}
 			// And apply each transaction in order
 			for index, tx := range block.Transactions() {
-				if err := advanceFunc(ctx, tx, uint64(block.SlotNumber()), index); err != nil {
+				if err := advanceFunc(ctx, tx, block.SlotNumber(), index); err != nil {
 					h.Logger.Warn().Str("blockHash", hex.EncodeToString(event.Advance.Hash)).Err(err).Msg("Error executing advance logic for transaction")
 					event.Finished <- err
 					return err
