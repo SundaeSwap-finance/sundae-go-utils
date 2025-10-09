@@ -31,8 +31,8 @@ type Message struct {
 	Finished chan error `json:"-"`
 }
 
-type UndoFunc func(ctx context.Context, tx ledger.Transaction, slot int) error
-type AdvanceFunc func(ctx context.Context, tx ledger.Transaction, slot int, txIndex int) error
+type UndoFunc func(ctx context.Context, tx ledger.Transaction, slot uint64) error
+type AdvanceFunc func(ctx context.Context, tx ledger.Transaction, slot uint64, txIndex int) error
 
 func (h *Syncer) SpawnSyncFunc(group *errgroup.Group, ctx context.Context, undoFunc UndoFunc, advanceFunc AdvanceFunc) {
 	group.Go(func() (err error) {
@@ -63,7 +63,7 @@ func (h *Syncer) SpawnSyncFunc(group *errgroup.Group, ctx context.Context, undoF
 				slices.Reverse(txs)
 				for _, tx := range txs {
 					// And invoke the undo logic
-					if err := undoFunc(ctx, tx, int(block.SlotNumber())); err != nil {
+					if err := undoFunc(ctx, tx, block.SlotNumber()); err != nil {
 						h.Logger.Warn().Str("blockHash", hex.EncodeToString(undo.Hash)).Err(err).Msg("Error executing undo logic for transaction")
 						event.Finished <- err
 						return err
@@ -83,7 +83,7 @@ func (h *Syncer) SpawnSyncFunc(group *errgroup.Group, ctx context.Context, undoF
 			}
 			// And apply each transaction in order
 			for index, tx := range block.Transactions() {
-				if err := advanceFunc(ctx, tx, int(block.SlotNumber()), index); err != nil {
+				if err := advanceFunc(ctx, tx, block.SlotNumber(), index); err != nil {
 					h.Logger.Warn().Str("blockHash", hex.EncodeToString(event.Advance.Hash)).Err(err).Msg("Error executing advance logic for transaction")
 					event.Finished <- err
 					return err

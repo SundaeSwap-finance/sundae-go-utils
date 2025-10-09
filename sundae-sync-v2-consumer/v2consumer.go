@@ -203,7 +203,7 @@ func (h *SyncV2Consumer) RunOne(c *cli.Context) error {
 	for idx, tx := range block.Transactions() {
 		if tx.Hash().String() == SyncV2ConsumerOpts.Transaction {
 			found = true
-			if err := h.Advance(ctx, tx, int(block.SlotNumber()), idx); err != nil {
+			if err := h.Advance(ctx, tx, uint64(block.SlotNumber()), idx); err != nil {
 				return fmt.Errorf("failed to advance tx: %w", err)
 			}
 			break
