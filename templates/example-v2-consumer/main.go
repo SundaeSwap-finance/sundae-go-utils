@@ -52,12 +52,12 @@ func action(c *cli.Context) error {
 
 }
 
-func (h *HelloHandler) rollBack(ctx context.Context, tx ledger.Transaction) error {
+func (h *HelloHandler) rollBack(ctx context.Context, tx ledger.Transaction, slot uint64) error {
 	h.logger.Info().Str("txId", tx.Hash().String()).Msg(h.rbMsg)
 	return nil
 }
 
-func (h *HelloHandler) rollForward(ctx context.Context, tx ledger.Transaction, slot int, txIndex int) error {
+func (h *HelloHandler) rollForward(ctx context.Context, tx ledger.Transaction, slot uint64, txIndex int) error {
 	h.logger.Info().Str("txId", tx.Hash().String()).Msg(h.fwMsg)
 	return nil
 }
