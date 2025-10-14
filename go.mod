@@ -61,6 +61,3 @@ require (
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-// replace github.com/SundaeSwap-finance/sundae-go-utils => ./...
-// replace github.com/SundaeSwap-finance/apollo => ../apollo

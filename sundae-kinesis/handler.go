@@ -1,3 +1,8 @@
+// Package sundaekinesis provides utilities for building AWS Kinesis consumers
+// that process blockchain synchronization events.
+//
+// This package includes Kinesis stream event handling, Ogmios chainsync integration,
+// automatic rollback/rollforward handling, and cursor management for resumable processing.
 package sundaekinesis
 
 import (

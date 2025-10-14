@@ -1,3 +1,8 @@
+// Package syncV2Consumer provides blockchain synchronization utilities for processing
+// Cardano transactions from Kinesis streams with S3 block storage.
+//
+// This package includes S3-backed block data retrieval, transaction advance/undo callbacks,
+// parallel block downloading, and DynamoDB transaction tracking.
 package syncV2Consumer
 
 import (

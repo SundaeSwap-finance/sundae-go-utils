@@ -1,3 +1,5 @@
+// Package sundaesecret provides AWS Secrets Manager integration for loading
+// configuration secrets into Go structs.
 package sundaesecret
 
 import (

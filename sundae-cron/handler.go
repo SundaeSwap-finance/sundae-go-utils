@@ -1,3 +1,4 @@
+// Package sundaecron provides utilities for building scheduled Lambda functions.
 package sundaecron
 
 import (

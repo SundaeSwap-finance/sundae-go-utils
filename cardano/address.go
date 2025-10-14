@@ -1,3 +1,8 @@
+// Package cardano provides utilities for working with Cardano blockchain primitives.
+//
+// This package includes functions for parsing and validating Shelley addresses,
+// extracting payment and staking credentials, converting slot numbers to datetime,
+// and handling Cardano metadata.
 package cardano
 
 import (

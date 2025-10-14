@@ -1,3 +1,4 @@
+// Package sundaerest provides REST API utilities with CORS support and common middleware.
 package sundaerest
 
 import (

@@ -1,3 +1,5 @@
+// Package sundaeddb provides DynamoDB and DAX client utilities with common patterns
+// for stream processing and data access.
 package sundaeddb
 
 import (

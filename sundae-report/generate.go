@@ -1,3 +1,5 @@
+// Package sundaereport provides report generation utilities for recurring data exports
+// and analysis tasks.
 package sundaereport
 
 import (

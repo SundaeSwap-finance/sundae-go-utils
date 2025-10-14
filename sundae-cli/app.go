@@ -1,3 +1,8 @@
+// Package sundaecli provides common CLI utilities and boilerplate for building
+// command-line applications and Lambda functions.
+//
+// This package includes standardized service configuration, common CLI flags,
+// structured logging setup, and build information tracking.
 package sundaecli
 
 import (

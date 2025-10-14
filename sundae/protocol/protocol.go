@@ -1,3 +1,9 @@
+// Package protocol provides SundaeSwap protocol-specific utilities for working
+// with pool contracts, LP tokens, and on-chain assets.
+//
+// This package includes protocol version management (V1, V3, Stableswaps),
+// pool NFT and LP token identification, pool identifier extraction,
+// and script reference management.
 package protocol
 
 import (

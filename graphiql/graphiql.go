@@ -1,3 +1,4 @@
+// Package graphiql provides an embedded GraphiQL interface for GraphQL API exploration.
 package graphiql
 
 import (
