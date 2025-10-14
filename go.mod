@@ -15,7 +15,7 @@ require (
 )
 
 require (
-	github.com/SundaeSwap-finance/ogmigo/v6 v6.1.1-0.20251014170817-74e9c0e41f30
+	github.com/SundaeSwap-finance/ogmigo/v6 v6.1.1-0.20251014193028-cab6e58fde5f
 	github.com/aws/aws-dax-go v1.2.14
 	github.com/aws/aws-sdk-go v1.55.8
 	github.com/blinklabs-io/gouroboros v0.132.0

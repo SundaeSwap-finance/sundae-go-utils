@@ -11,6 +11,8 @@ github.com/SundaeSwap-finance/ogmigo/v6 v6.1.0 h1:YhlwRzOvQMQyRyRQEYXQrHqc7nTg7r
 github.com/SundaeSwap-finance/ogmigo/v6 v6.1.0/go.mod h1:FgU9nAQNyi+ApWqXB+DKAcbPISl/2gFZGJklqWmT9qY=
 github.com/SundaeSwap-finance/ogmigo/v6 v6.1.1-0.20251014170817-74e9c0e41f30 h1:A/PA6PvVsAwEkeDrxwf1gHcCNkKh2jCjJDF+LaTxfZs=
 github.com/SundaeSwap-finance/ogmigo/v6 v6.1.1-0.20251014170817-74e9c0e41f30/go.mod h1:lcJvzDZSYrzJvgL4MChhFlPBP2qDiuJ4QJaAfi4rWV4=
+github.com/SundaeSwap-finance/ogmigo/v6 v6.1.1-0.20251014193028-cab6e58fde5f h1:ZJ31zcHSdCSjJuC92yygxOBPgV0gNk/Kg+BtVzUmVXI=
+github.com/SundaeSwap-finance/ogmigo/v6 v6.1.1-0.20251014193028-cab6e58fde5f/go.mod h1:lcJvzDZSYrzJvgL4MChhFlPBP2qDiuJ4QJaAfi4rWV4=
 github.com/aead/siphash v1.0.1/go.mod h1:Nywa3cDsYNNK3gaciGTWPwHt0wlpNV15vwmswBAUSII=
 github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a/go.mod h1:SGnFV6hVsYE877CKEZ6tDNTjaSXYUk6QqoIK6PrAtcc=
 github.com/alicebob/miniredis v2.5.0+incompatible/go.mod h1:8HZjEj4yU0dwhYHky+DxYx+6BMjkBbe5ONFIF1MXffk=
