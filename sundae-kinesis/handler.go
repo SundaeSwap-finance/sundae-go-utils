@@ -16,8 +16,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/!sundae!swap-finance/sundae-scooper/build/ogmigolog"
 	"github.com/SundaeSwap-finance/ogmigo/v6"
+	ogmigolog "github.com/SundaeSwap-finance/ogmigo/v6/logger/zerolog"
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync"
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync/compatibility"
 	"github.com/SundaeSwap-finance/sundae-go-utils/cardano"
