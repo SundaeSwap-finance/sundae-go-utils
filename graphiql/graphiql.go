@@ -28,7 +28,10 @@ func New(endpoint string) http.HandlerFunc {
 		if err := templ.Execute(&buffer, variables); err != nil {
 			fmt.Printf("Error: %v\n", err)
 			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
-		w.Write(buffer.Bytes())
+		if _, err := w.Write(buffer.Bytes()); err != nil {
+			fmt.Printf("Error writing response: %v\n", err)
+		}
 	}
 }

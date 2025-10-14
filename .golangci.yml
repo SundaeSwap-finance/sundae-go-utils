@@ -1,0 +1,30 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosimple
+    - govet
+
+linters-settings:
+  staticcheck:
+    checks:
+      - all
+      - -SA1019 # Disable deprecation warnings (we know about AWS SDK v1, will migrate later)
+
+issues:
+  exclude-rules:
+    # Exclude AWS SDK v1 deprecation warnings - we're not ready to migrate yet
+    - linters:
+        - staticcheck
+      text: "aws-sdk-go is deprecated"
+
+    # Exclude test files from some checks
+    - path: _test\.go
+      linters:
+        - errcheck

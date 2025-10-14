@@ -61,7 +61,7 @@ func mapToDimensions(ms ...map[DimensionName]string) []*cloudwatch.Dimension {
 
 func (m Metrics) Event(ctx context.Context, name MetricName, dimensions ...map[DimensionName]string) {
 	awsDimensions := mapToDimensions(append(dimensions, defaultDimensions(m.service))...)
-	m.cloudwatch.PutMetricDataWithContext(ctx, &cloudwatch.PutMetricDataInput{
+	_, err := m.cloudwatch.PutMetricDataWithContext(ctx, &cloudwatch.PutMetricDataInput{
 		Namespace: aws.String("sundae-services"),
 		MetricData: []*cloudwatch.MetricDatum{
 			{
@@ -73,6 +73,9 @@ func (m Metrics) Event(ctx context.Context, name MetricName, dimensions ...map[D
 			},
 		},
 	})
+	if err != nil {
+		fmt.Printf("Warning: couldn't publish event for %v: %+v\n", name, err)
+	}
 }
 
 func (m Metrics) Timing(ctx context.Context, name MetricName, start time.Time, dimensions ...map[DimensionName]string) {
@@ -96,7 +99,7 @@ func (m Metrics) Timing(ctx context.Context, name MetricName, start time.Time, d
 
 func (m Metrics) Gauge(ctx context.Context, name MetricName, value float64, dimensions ...map[DimensionName]string) {
 	awsDimensions := mapToDimensions(append(dimensions, defaultDimensions(m.service))...)
-	m.cloudwatch.PutMetricDataWithContext(ctx, &cloudwatch.PutMetricDataInput{
+	_, err := m.cloudwatch.PutMetricDataWithContext(ctx, &cloudwatch.PutMetricDataInput{
 		Namespace: aws.String("sundae-services"),
 		MetricData: []*cloudwatch.MetricDatum{
 			{
@@ -108,4 +111,7 @@ func (m Metrics) Gauge(ctx context.Context, name MetricName, value float64, dime
 			},
 		},
 	})
+	if err != nil {
+		fmt.Printf("Warning: couldn't publish gauge for %v: %+v\n", name, err)
+	}
 }

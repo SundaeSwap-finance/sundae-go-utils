@@ -196,7 +196,9 @@ func (h *Handler) onRollBackward(ctx context.Context, ps *chainsync.PointStruct)
 	if sundaecli.CommonOpts.Dry || KinesisOpts.PatchReplay {
 		if h.rollBackward != nil {
 			// TODO?
-			h.rollBackward(ctx, h.Logger, 0)
+			if err := h.rollBackward(ctx, h.Logger, 0); err != nil {
+				return err
+			}
 		}
 		return nil
 	} else {

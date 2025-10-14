@@ -247,7 +247,11 @@ func rollback(ctx context.Context, logger zerolog.Logger,
 ### Running Tests
 
 ```bash
+# Run unit tests
 go test ./...
+
+# Run integration tests (requires local DynamoDB on localhost:8000)
+go test -tags=integration ./...
 ```
 
 ### Building Examples

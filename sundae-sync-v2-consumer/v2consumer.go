@@ -114,8 +114,7 @@ func (h *SyncV2Consumer) StartLambda(c *cli.Context) error {
 
 	syncer.SpawnSyncFunc(group, ctx, h.Undo, h.Advance)
 
-	lambda.Start(func(ctx context.Context, event events.KinesisEvent) error {
-		ctx = h.Logger.WithContext(ctx)
+	lambda.Start(func(_ context.Context, event events.KinesisEvent) error {
 		for _, r := range event.Records {
 			if err := <-syncer.HandleOne(r.Kinesis.Data); err != nil {
 				return err
