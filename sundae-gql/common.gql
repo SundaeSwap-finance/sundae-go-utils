@@ -21,6 +21,7 @@ A specific moment in time
 """
 type DateTime {
     slot: Int!
+    unixMilli: String!
     format(layout: String = "2006-01-02T15:04:05Z"): String!
 }
 
