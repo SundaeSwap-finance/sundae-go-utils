@@ -18,13 +18,17 @@ import (
 
 // Serve a mildly opinionated graphql webserver, optionally with playground attached
 func Webserver(resolver Resolver) error {
+	return WebserverWithRouter(DefaultRouter(resolver.Config().Logger), resolver)
+}
+
+// Serve a mildly opinionated graphql webserver, optionally with playground attached
+// using the provided chi router for optional customization
+func WebserverWithRouter(router chi.Router, resolver Resolver) error {
 	config := resolver.Config()
 	relay, err := GraphQLRelay(resolver)
 	if err != nil {
 		return err
 	}
-
-	router := DefaultRouter(config.Logger)
 
 	router.Post("/graphql", middleware.NoCache(relay).ServeHTTP)
 	// Allow arbitrary path parameters, for better UX in the browser
