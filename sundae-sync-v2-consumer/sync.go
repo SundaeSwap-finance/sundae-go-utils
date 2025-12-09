@@ -63,7 +63,7 @@ type Message struct {
 	Finished chan error `json:"-"`
 }
 
-type UndoFunc func(ctx context.Context, tx ledger.Transaction, slot uint64) error
+type UndoFunc func(ctx context.Context, tx ledger.Transaction, slot uint64, txIndex int) error
 type AdvanceFunc func(ctx context.Context, tx ledger.Transaction, slot uint64, txIndex int) error
 
 func (h *Syncer) SpawnSyncFunc(group *errgroup.Group, ctx context.Context, undoFunc UndoFunc, advanceFunc AdvanceFunc) {
@@ -107,8 +107,8 @@ func (h *Syncer) processEvent(ctx context.Context, event Message, undoFunc UndoF
 		}
 		txs := block.Transactions()
 		slices.Reverse(txs)
-		for _, tx := range txs {
-			if err := undoFunc(ctx, tx, block.SlotNumber()); err != nil {
+		for index, tx := range txs {
+			if err := undoFunc(ctx, tx, block.SlotNumber(), index); err != nil {
 				h.Logger.Warn().Str("blockHash", hex.EncodeToString(undo.Hash)).Err(err).Msg("Error executing undo logic for transaction")
 				return err
 			}
