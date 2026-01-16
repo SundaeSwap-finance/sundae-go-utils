@@ -43,7 +43,7 @@ var StreamFlag = sundaecli.StringFlag("kinesis-stream", "The stream name or arn 
 var AccountFlag = sundaecli.StringFlag("aws-account", "The AWS Account number, for interpolating S3 buckets", &SyncV2ConsumerOpts.Account)
 var TsFlag = sundaecli.TimestampFlag("kinesis-timestamp", "2006-01-02 15:04:05", "The timestamp to start syncing from", &SyncV2ConsumerOpts.Timestamp)
 
-// BucketFlag overrides the default `{env}-sundae-sync-v2-{account}-us-east-2`
+// BucketFlag overrides the default `{network}-sundae-sync-v2-{account}-us-east-2`
 // bucket. Accepts a bare bucket name or `s3://name[/prefix]`. When combined
 // with --start-height the consumer runs in an offline replay mode that pulls
 // archived blocks directly from this bucket via the S3Downloader.
@@ -124,7 +124,7 @@ func (h *SyncV2Consumer) StartLambda(c *cli.Context) error {
 	downloader := S3Downloader{
 		Logger:  h.Logger,
 		S3:      h.S3,
-		Env:     sundaecli.CommonOpts.Env,
+		Network: sundaecli.CommonOpts.Network,
 		Account: SyncV2ConsumerOpts.Account,
 	}
 	syncer := Syncer{
@@ -173,7 +173,7 @@ func (h *SyncV2Consumer) StartKinesis(c *cli.Context) error {
 	downloader := S3Downloader{
 		Logger:  h.Logger,
 		S3:      h.S3,
-		Env:     sundaecli.CommonOpts.Env,
+		Network: sundaecli.CommonOpts.Network,
 		Account: SyncV2ConsumerOpts.Account,
 	}
 	syncer := Syncer{
@@ -200,7 +200,7 @@ func (h *SyncV2Consumer) StartKinesis(c *cli.Context) error {
 
 // StartReplay drives the existing replay framework with the consumer's
 // Advance callback. The block source is the S3 bucket given by --bucket
-// (defaulting to the conventional `{env}-sundae-sync-v2-{account}-us-east-2`
+// (defaulting to the conventional `{network}-sundae-sync-v2-{account}-us-east-2`
 // bucket); replay itself handles the height iteration, parallel workers, and
 // per-tx dispatch.
 //
@@ -211,7 +211,7 @@ func (h *SyncV2Consumer) StartReplay(c *cli.Context) error {
 	bucket := SyncV2ConsumerOpts.Bucket
 	if bucket == "" {
 		bucket = fmt.Sprintf("%v-sundae-sync-v2-%v-us-east-2",
-			sundaecli.CommonOpts.Env, SyncV2ConsumerOpts.Account)
+			sundaecli.CommonOpts.Network, SyncV2ConsumerOpts.Account)
 	}
 
 	// SharedConfigEnable so AWS_PROFILE works for `--start-height` runs invoked
@@ -226,7 +226,7 @@ func (h *SyncV2Consumer) StartReplay(c *cli.Context) error {
 
 	cfg := replay.Config{
 		BlockSource: &replay.S3BlockSource{S3: s3client, Bucket: bucket},
-		LookupTable: txdao.TableName(sundaecli.CommonOpts.Env),
+		LookupTable: txdao.TableName(sundaecli.CommonOpts.Network),
 		StartHeight: SyncV2ConsumerOpts.StartHeight,
 	}
 	r := replay.New(api, cfg, replay.AdvanceFunc(h.Advance), h.Logger)
@@ -238,7 +238,7 @@ func (h *SyncV2Consumer) RunOne(c *cli.Context) error {
 	downloader := S3Downloader{
 		Logger:  h.Logger,
 		S3:      h.S3,
-		Env:     sundaecli.CommonOpts.Env,
+		Network: sundaecli.CommonOpts.Network,
 		Account: SyncV2ConsumerOpts.Account,
 	}
 

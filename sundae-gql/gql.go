@@ -11,7 +11,7 @@ import (
 )
 
 func AllowIntrospection() bool {
-	return sundaecli.CommonOpts.Env != "mainnet" || sundaecli.CommonOpts.Console
+	return sundaecli.CommonOpts.Network != "mainnet" || sundaecli.CommonOpts.Console
 }
 
 type Resolver interface {

@@ -9,10 +9,10 @@ import (
 )
 
 func Build(api dynamodbiface.DynamoDBAPI) *DAO {
-	return New(api, TableName(sundaecli.CommonOpts.Env), zerolog.New(os.Stdout), sundaecli.CommonOpts.Dry)
+	return New(api, TableName(sundaecli.CommonOpts.Network), zerolog.New(os.Stdout), sundaecli.CommonOpts.Dry)
 }
 
-func TableName(env string) string {
-	tableName := env + "-sundae-sync-v2--lookup"
+func TableName(network string) string {
+	tableName := network + "-sundae-sync-v2--lookup"
 	return tableName
 }

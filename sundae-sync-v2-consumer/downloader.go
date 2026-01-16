@@ -19,10 +19,10 @@ type Downloader interface {
 
 type S3Downloader struct {
 	Logger  zerolog.Logger
-	Env     string
+	Network string
 	Account string
 	S3      s3iface.S3API
-	// Bucket overrides the default `{Env}-sundae-sync-v2-{Account}-us-east-2`
+	// Bucket overrides the default `{Network}-sundae-sync-v2-{Account}-us-east-2`
 	// bucket. Accepts a bare bucket name or an `s3://name` URI. Empty falls
 	// back to the conventional interpolation.
 	Bucket string
@@ -34,7 +34,7 @@ func (h *S3Downloader) bucketName() string {
 	if h.Bucket != "" {
 		return strings.TrimPrefix(h.Bucket, "s3://")
 	}
-	return fmt.Sprintf("%v-sundae-sync-v2-%v-us-east-2", h.Env, h.Account)
+	return fmt.Sprintf("%v-sundae-sync-v2-%v-us-east-2", h.Network, h.Account)
 }
 
 // Download a block from the S3 bucket and return the bytes
