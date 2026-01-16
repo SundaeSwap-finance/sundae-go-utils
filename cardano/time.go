@@ -43,22 +43,27 @@ const (
 	SlotOffsetMainnet = 1591566291
 )
 
-func EnvToSlotOffset(env string) (uint64, error) {
-	if env == "" {
-		env = sundaecli.CommonOpts.Env
+func NetworkToSlotOffset(network string) (uint64, error) {
+	if network == "" {
+		network = sundaecli.CommonOpts.Network
 	}
-	switch env {
+	switch network {
 	case "preview":
 		return SlotOffsetPreview, nil
-	case "mainnet", "cardano-tom": // This is a bit messy, we should unravel this at some point; chain and environment should be separate
+	case "mainnet", "cardano-tom":
 		return SlotOffsetMainnet, nil
 	default:
 		if sundaecli.CommonOpts.SlotOffset != 0 {
 			return sundaecli.CommonOpts.SlotOffset, nil
 		} else {
-			return 0, fmt.Errorf("unrecognized environment %v", env)
+			return 0, fmt.Errorf("unrecognized network %v", network)
 		}
 	}
+}
+
+// EnvToSlotOffset is deprecated, use NetworkToSlotOffset instead
+func EnvToSlotOffset(env string) (uint64, error) {
+	return NetworkToSlotOffset(env)
 }
 
 func SlotToTimeEnv(slot uint64, env string) (time.Time, error) {
@@ -85,18 +90,17 @@ func SlotToDateTimeEnv(slot uint64, env string) (DateTime, error) {
 	return SlotToDateTime(slot, slotOffset), nil
 }
 
-func TimeToSlotEnv(time time.Time, env string) (uint64, error) {
-	if env == "" {
-		env = sundaecli.CommonOpts.Env
+func TimeToSlotNetwork(t time.Time, network string) (uint64, error) {
+	slotOffset, err := NetworkToSlotOffset(network)
+	if err != nil {
+		return 0, err
 	}
-	switch env {
-	case "preview":
-		return TimeToSlot(time, SlotOffsetPreview), nil
-	case "mainnet", "cardano-tom": // This is a bit messy, we should unravel this at some point; chain and environment should be separate
-		return TimeToSlot(time, SlotOffsetMainnet), nil
-	default:
-		return 0, fmt.Errorf("unrecognized environment %v", env)
-	}
+	return TimeToSlot(t, slotOffset), nil
+}
+
+// TimeToSlotEnv is deprecated, use TimeToSlotNetwork instead
+func TimeToSlotEnv(t time.Time, env string) (uint64, error) {
+	return TimeToSlotNetwork(t, env)
 }
 
 func TimeToSlot(time time.Time, offset uint64) uint64 {

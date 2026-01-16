@@ -34,7 +34,7 @@ func Webserver(service sundaecli.Service, routes chi.Router) error {
 		return http.ListenAndServe(addr, routes)
 	}
 
-	lambda.Start(apigateway.Wrap(routes, sundaecli.CommonOpts.Env))
+	lambda.Start(apigateway.Wrap(routes, sundaecli.CommonOpts.Network))
 	return nil
 }
 

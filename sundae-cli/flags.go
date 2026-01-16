@@ -10,13 +10,15 @@ var CommonOpts struct {
 	Console    bool
 	Dry        bool
 	Env        string
+	Network    string
 	SlotOffset uint64
 	Port       int
 }
 
 var ConsoleFlag = BoolFlag("console", "whether to run in console mode or lambda mode", &CommonOpts.Console)
 var DryFlag = BoolFlag("dry", "whether to actually persist any records or not", &CommonOpts.Dry)
-var EnvFlag = StringFlag("env", "the deployment environment / cardano network", &CommonOpts.Env)
+var EnvFlag = StringFlag("env", "the deployment environment", &CommonOpts.Env)
+var NetworkFlag = StringFlag("network", "the cardano network (preview, mainnet)", &CommonOpts.Network)
 var SlotOffset = Uint64Flag("slot-offset", "the offset for this environment between slots and unix time", &CommonOpts.SlotOffset)
 var PortFlag = func(p int) *cli.IntFlag {
 	return &cli.IntFlag{
@@ -32,6 +34,7 @@ var CommonFlags = []cli.Flag{
 	ConsoleFlag,
 	DryFlag,
 	EnvFlag,
+	NetworkFlag,
 	SlotOffset,
 }
 

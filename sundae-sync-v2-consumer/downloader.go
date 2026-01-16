@@ -18,7 +18,7 @@ type Downloader interface {
 
 type S3Downloader struct {
 	Logger  zerolog.Logger
-	Env     string
+	Network string
 	Account string
 	S3      s3iface.S3API
 }
@@ -28,7 +28,7 @@ func (h *S3Downloader) DownloadBlockSync(hash []byte) ([]byte, error) {
 	prefix := fmt.Sprintf("%02x", hash[0])
 	filename := fmt.Sprintf("blocks/by-hash/%v/%v.cbor", prefix, hex.EncodeToString(hash))
 	resp, err := h.S3.GetObject(&s3.GetObjectInput{
-		Bucket: aws.String(fmt.Sprintf("%v-sundae-sync-v2-%v-us-east-2", h.Env, h.Account)),
+		Bucket: aws.String(fmt.Sprintf("%v-sundae-sync-v2-%v-us-east-2", h.Network, h.Account)),
 		Key:    aws.String(filename),
 	})
 	if err != nil {
