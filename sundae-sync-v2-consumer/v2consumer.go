@@ -102,7 +102,7 @@ func (h *SyncV2Consumer) StartLambda(c *cli.Context) error {
 	downloader := S3Downloader{
 		Logger:  h.Logger,
 		S3:      h.S3,
-		Env:     sundaecli.CommonOpts.Env,
+		Network: sundaecli.CommonOpts.Network,
 		Account: SyncV2ConsumerOpts.Account,
 	}
 	syncer := Syncer{
@@ -151,7 +151,7 @@ func (h *SyncV2Consumer) StartKinesis(c *cli.Context) error {
 	downloader := S3Downloader{
 		Logger:  h.Logger,
 		S3:      h.S3,
-		Env:     sundaecli.CommonOpts.Env,
+		Network: sundaecli.CommonOpts.Network,
 		Account: SyncV2ConsumerOpts.Account,
 	}
 	syncer := Syncer{
@@ -181,7 +181,7 @@ func (h *SyncV2Consumer) RunOne(c *cli.Context) error {
 	downloader := S3Downloader{
 		Logger:  h.Logger,
 		S3:      h.S3,
-		Env:     sundaecli.CommonOpts.Env,
+		Network: sundaecli.CommonOpts.Network,
 		Account: SyncV2ConsumerOpts.Account,
 	}
 

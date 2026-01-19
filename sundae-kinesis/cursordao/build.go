@@ -5,11 +5,11 @@ import (
 )
 
 // Build protocol dao pointing to local db
-func Build(api dynamodbiface.DynamoDBAPI, env string) *DAO {
-	return New(api, TableName(env))
+func Build(api dynamodbiface.DynamoDBAPI, network string) *DAO {
+	return New(api, TableName(network))
 }
 
-func TableName(env string) string {
-	tableName := env + "-sundae-sync--cursor"
+func TableName(network string) string {
+	tableName := network + "-sundae-sync--cursor"
 	return tableName
 }

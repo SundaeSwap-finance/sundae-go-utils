@@ -18,9 +18,19 @@ func App(service Service, action cli.ActionFunc, flags ...cli.Flag) *cli.App {
 		Usage:                fmt.Sprintf("%v API Server", service.Name),
 		Version:              service.Version,
 		EnableBashCompletion: true,
+		Before:               InitCommonOpts,
 		Action:               action,
 		Flags:                flags,
 	}
+}
+
+// InitCommonOpts initializes default values for CommonOpts after flag parsing.
+// If Network is not specified, it falls back to Env for backward compatibility.
+func InitCommonOpts(c *cli.Context) error {
+	if !c.IsSet("network") && c.IsSet("env") {
+		return c.Set("network", c.String("env"))
+	}
+	return nil
 }
 
 func CommitHash() string {

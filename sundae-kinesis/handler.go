@@ -75,7 +75,7 @@ func NewHandler(
 	return &Handler{
 		Service:          service,
 		Logger:           sundaecli.Logger(service),
-		cursor:           cursordao.Build(api, sundaecli.CommonOpts.Env),
+		cursor:           cursordao.Build(api, sundaecli.CommonOpts.Network),
 		cursorUsage:      service.Name,
 		rollForwardBlock: rollForwardBlock,
 		rollForwardTx:    rollForwardTx,
@@ -263,7 +263,7 @@ func parsePoints(pp ...string) ([]chainsync.Point, error) {
 func (h *Handler) handleRealtime() error {
 	streamName := KinesisOpts.StreamName
 	if streamName == "" {
-		streamName = fmt.Sprintf("%v-sundae-sync--tx", sundaecli.CommonOpts.Env)
+		streamName = fmt.Sprintf("%v-sundae-sync--tx", sundaecli.CommonOpts.Network)
 	}
 	var options []consumer.Option
 	if KinesisOpts.Replay {
