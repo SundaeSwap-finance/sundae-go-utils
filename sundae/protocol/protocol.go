@@ -1,7 +1,7 @@
 // Package protocol provides SundaeSwap protocol-specific utilities for working
 // with pool contracts, LP tokens, and on-chain assets.
 //
-// This package includes protocol version management (V1, V3, Stableswaps),
+// This package includes protocol version management (V1, V3, Stableswaps, StableswapsV2),
 // pool NFT and LP token identification, pool identifier extraction,
 // and script reference management.
 package protocol
@@ -20,9 +20,10 @@ import (
 type ProtocolVersion string
 
 var (
-	V1          ProtocolVersion = "V1"
-	V3          ProtocolVersion = "V3"
-	Stableswaps ProtocolVersion = "Stableswaps"
+	V1            ProtocolVersion = "V1"
+	V3            ProtocolVersion = "V3"
+	Stableswaps   ProtocolVersion = "Stableswaps"
+	StableswapsV2 ProtocolVersion = "StableswapsV2"
 )
 
 // TODO: ogmigo type?
@@ -145,6 +146,8 @@ func (p Protocol) GetPoolNFT(ident string) (shared.AssetID, error) {
 	case V3:
 		fallthrough
 	case Stableswaps:
+		fallthrough
+	case StableswapsV2:
 		return shared.FromSeparate(poolScriptHash, V3PoolNFTHexPrefix+ident), nil
 	default:
 		return "", fmt.Errorf("unrecognized protocol version %v", p.Version)
@@ -172,6 +175,8 @@ func (p Protocol) IsPoolNFT(assetId shared.AssetID) (bool, error) {
 	case V3:
 		fallthrough
 	case Stableswaps:
+		fallthrough
+	case StableswapsV2:
 		return strings.HasPrefix(assetId.AssetName(), V3PoolNFTHexPrefix), nil
 	default:
 		return false, fmt.Errorf("unrecognized protocol version %v", p.Version)
@@ -204,6 +209,8 @@ func (p Protocol) GetLPAsset(ident string) (shared.AssetID, error) {
 	case V3:
 		fallthrough
 	case Stableswaps:
+		fallthrough
+	case StableswapsV2:
 		return shared.FromSeparate(poolScriptHash, V3LPHexPrefix+ident), nil
 	default:
 		return "", fmt.Errorf("unrecognized protocol version %v", p.Version)
@@ -231,6 +238,8 @@ func (p Protocol) IsLPAsset(assetId shared.AssetID) (bool, error) {
 	case V3:
 		fallthrough
 	case Stableswaps:
+		fallthrough
+	case StableswapsV2:
 		return strings.HasPrefix(assetId.AssetName(), V3LPHexPrefix), nil
 	default:
 		return false, fmt.Errorf("unrecognized protocol version %v", p.Version)
@@ -258,6 +267,8 @@ func (p Protocol) GetIdent(assetId shared.AssetID) (string, bool, error) {
 	case V3:
 		fallthrough
 	case Stableswaps:
+		fallthrough
+	case StableswapsV2:
 		switch {
 		case strings.HasPrefix(assetId.AssetName(), V3PoolNFTHexPrefix):
 			return strings.TrimPrefix(assetId.AssetName(), V3PoolNFTHexPrefix), true, nil

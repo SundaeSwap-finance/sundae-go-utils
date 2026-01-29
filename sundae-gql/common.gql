@@ -52,4 +52,5 @@ enum Version {
     V1
     V3
     Stableswaps
+    StableswapsV2
 }
