@@ -40,6 +40,7 @@ func (d DateTime) Format(args struct{ Layout string }) string {
 
 const (
 	SlotOffsetPreview = 1666656000
+	SlotOffsetPreprod = 1655683200
 	SlotOffsetMainnet = 1591566291
 )
 
@@ -50,6 +51,8 @@ func EnvToSlotOffset(env string) (uint64, error) {
 	switch env {
 	case "preview":
 		return SlotOffsetPreview, nil
+	case "preprod":
+		return SlotOffsetPreprod, nil
 	case "mainnet", "cardano-tom": // This is a bit messy, we should unravel this at some point; chain and environment should be separate
 		return SlotOffsetMainnet, nil
 	default:
@@ -92,6 +95,8 @@ func TimeToSlotEnv(time time.Time, env string) (uint64, error) {
 	switch env {
 	case "preview":
 		return TimeToSlot(time, SlotOffsetPreview), nil
+	case "preprod":
+		return TimeToSlot(time, SlotOffsetPreprod), nil
 	case "mainnet", "cardano-tom": // This is a bit messy, we should unravel this at some point; chain and environment should be separate
 		return TimeToSlot(time, SlotOffsetMainnet), nil
 	default:
