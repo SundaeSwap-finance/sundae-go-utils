@@ -105,7 +105,7 @@ func (d *Dispatcher) processRecord(ctx context.Context, record events.KinesisEve
 		})
 	}
 
-	g.Wait()
+	_ = g.Wait() // goroutines always return nil; errors collected in firstErr
 	return firstErr
 }
 
