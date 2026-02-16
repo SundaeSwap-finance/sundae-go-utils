@@ -56,9 +56,19 @@ func PongMessage() []byte {
 	return b
 }
 
-// NextMessage returns a "next" message with the given subscription ID and payload.
-func NextMessage(id string, payload interface{}) ([]byte, error) {
-	payloadBytes, err := json.Marshal(payload)
+// NextMessage returns a "next" message with the given subscription ID, payload,
+// and optional message ID for client-side deduplication. If messageID is
+// non-empty, it is included in the payload's extensions.
+func NextMessage(id string, payload interface{}, messageID string) ([]byte, error) {
+	// Build a proper ExecutionResult: {data, extensions?}
+	result := map[string]interface{}{
+		"data": payload,
+	}
+	if messageID != "" {
+		result["extensions"] = map[string]string{"messageId": messageID}
+	}
+
+	payloadBytes, err := json.Marshal(result)
 	if err != nil {
 		return nil, fmt.Errorf("marshalling next payload: %w", err)
 	}

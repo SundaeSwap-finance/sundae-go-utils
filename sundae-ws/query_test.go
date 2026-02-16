@@ -68,13 +68,26 @@ func TestProtocol(t *testing.T) {
 		assert.Equal(t, MsgConnectionAck, msg.Type)
 	})
 
-	t.Run("NextMessage", func(t *testing.T) {
-		data, err := NextMessage("1", map[string]string{"poolId": "abc"})
+	t.Run("NextMessage without messageID", func(t *testing.T) {
+		data, err := NextMessage("1", map[string]string{"poolId": "abc"}, "")
 		assert.NoError(t, err)
 		msg, err := ParseMessage(string(data))
 		assert.NoError(t, err)
 		assert.Equal(t, MsgNext, msg.Type)
 		assert.Equal(t, "1", msg.ID)
+		// Payload should have data but no extensions
+		assert.Contains(t, string(msg.Payload), `"data"`)
+		assert.NotContains(t, string(msg.Payload), `"extensions"`)
+	})
+
+	t.Run("NextMessage with messageID", func(t *testing.T) {
+		data, err := NextMessage("1", map[string]string{"poolId": "abc"}, "msg-123")
+		assert.NoError(t, err)
+		msg, err := ParseMessage(string(data))
+		assert.NoError(t, err)
+		assert.Equal(t, MsgNext, msg.Type)
+		assert.Equal(t, "1", msg.ID)
+		assert.Contains(t, string(msg.Payload), `"messageId":"msg-123"`)
 	})
 
 	t.Run("ErrorMessage", func(t *testing.T) {

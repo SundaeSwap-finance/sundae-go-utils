@@ -12,8 +12,9 @@ type SubscriptionFieldExtractor func(payload SubscribePayload) (fieldName string
 
 // SimpleExtractSubscriptionField provides a basic extraction of the subscription
 // field name from the query string. It looks for the first field after
-// "subscription" and extracts inline string arguments. For full variable
-// substitution, use a proper GraphQL parser.
+// "subscription" and passes through payload.Variables as arguments. It does NOT
+// parse inline arguments from the query text. For full query parsing with inline
+// argument extraction, use a proper GraphQL parser via SubscriptionFieldExtractor.
 func SimpleExtractSubscriptionField(payload SubscribePayload) (string, map[string]interface{}, error) {
 	query := strings.TrimSpace(payload.Query)
 

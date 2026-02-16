@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/SundaeSwap-finance/sundae-go-utils/sundae-ws/connectiondao"
@@ -12,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/apigatewaymanagementapi"
+	"github.com/aws/aws-sdk-go/service/apigatewaymanagementapi/apigatewaymanagementapiiface"
 	"github.com/rs/zerolog"
 )
 
@@ -23,12 +25,33 @@ type TopicResolver interface {
 
 // Handler handles WebSocket API Gateway events for the graphql-ws protocol.
 type Handler struct {
-	Connections    *connectiondao.DAO
-	Subs           *subscriptiondao.DAO
-	Topics         TopicResolver
-	ExtractField   SubscriptionFieldExtractor
-	Logger         zerolog.Logger
-	ConnTTL        time.Duration // TTL for connection records (default 2 hours)
+	Connections  *connectiondao.DAO
+	Subs         *subscriptiondao.DAO
+	Topics       TopicResolver
+	ExtractField SubscriptionFieldExtractor
+	Logger       zerolog.Logger
+	ConnTTL      time.Duration // TTL for connection records (default 2 hours)
+
+	mgmtMu      sync.RWMutex
+	mgmtClients map[string]apigatewaymanagementapiiface.ApiGatewayManagementApiAPI
+}
+
+// NewHandler creates a Handler with all required dependencies.
+func NewHandler(
+	connections *connectiondao.DAO,
+	subs *subscriptiondao.DAO,
+	topics TopicResolver,
+	logger zerolog.Logger,
+) *Handler {
+	return &Handler{
+		Connections:  connections,
+		Subs:         subs,
+		Topics:       topics,
+		ExtractField: SimpleExtractSubscriptionField,
+		Logger:       logger,
+		ConnTTL:      2 * time.Hour,
+		mgmtClients:  make(map[string]apigatewaymanagementapiiface.ApiGatewayManagementApiAPI),
+	}
 }
 
 // HandleEvent routes an API Gateway WebSocket event to the appropriate handler.
@@ -212,12 +235,35 @@ func (h *Handler) handleComplete(ctx context.Context, logger zerolog.Logger, con
 }
 
 func (h *Handler) postToConnection(ctx context.Context, endpoint, connID string, data []byte) error {
-	sess := session.Must(session.NewSession(aws.NewConfig().WithEndpoint(endpoint)))
-	client := apigatewaymanagementapi.New(sess)
-
+	client := h.getManagementClient(endpoint)
 	_, err := client.PostToConnectionWithContext(ctx, &apigatewaymanagementapi.PostToConnectionInput{
 		ConnectionId: aws.String(connID),
 		Data:         data,
 	})
 	return err
+}
+
+func (h *Handler) getManagementClient(endpoint string) apigatewaymanagementapiiface.ApiGatewayManagementApiAPI {
+	h.mgmtMu.RLock()
+	if client, ok := h.mgmtClients[endpoint]; ok {
+		h.mgmtMu.RUnlock()
+		return client
+	}
+	h.mgmtMu.RUnlock()
+
+	h.mgmtMu.Lock()
+	defer h.mgmtMu.Unlock()
+
+	if client, ok := h.mgmtClients[endpoint]; ok {
+		return client
+	}
+
+	if h.mgmtClients == nil {
+		h.mgmtClients = make(map[string]apigatewaymanagementapiiface.ApiGatewayManagementApiAPI)
+	}
+
+	sess := session.Must(session.NewSession(aws.NewConfig().WithEndpoint(endpoint)))
+	client := apigatewaymanagementapi.New(sess)
+	h.mgmtClients[endpoint] = client
+	return client
 }

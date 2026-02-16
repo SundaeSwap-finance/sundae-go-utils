@@ -3,14 +3,15 @@ package sundaews
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/SundaeSwap-finance/sundae-go-utils/sundae-ws/connectiondao"
 	"github.com/SundaeSwap-finance/sundae-go-utils/sundae-ws/subscriptiondao"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/apigatewaymanagementapi"
 	"github.com/aws/aws-sdk-go/service/apigatewaymanagementapi/apigatewaymanagementapiiface"
@@ -35,15 +36,18 @@ type Dispatcher struct {
 // HandleKinesisEvent processes a batch of Kinesis records and fans out events
 // to matching WebSocket subscribers.
 func (d *Dispatcher) HandleKinesisEvent(ctx context.Context, event events.KinesisEvent) error {
+	var firstErr error
 	for _, record := range event.Records {
 		if err := d.processRecord(ctx, record); err != nil {
 			d.Logger.Error().Err(err).
 				Str("event_id", record.EventID).
 				Msg("failed to process kinesis record")
-			// Continue processing other records rather than failing the whole batch
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
 	}
-	return nil
+	return firstErr
 }
 
 func (d *Dispatcher) processRecord(ctx context.Context, record events.KinesisEventRecord) error {
@@ -82,15 +86,15 @@ func (d *Dispatcher) processRecord(ctx context.Context, record events.KinesisEve
 	for _, sub := range subs {
 		sub := sub
 		g.Go(func() error {
-			return d.sendToSubscriber(ctx, sub, envelope.Payload)
+			return d.sendToSubscriber(ctx, sub, envelope.Payload, envelope.MessageID)
 		})
 	}
 
 	return g.Wait()
 }
 
-func (d *Dispatcher) sendToSubscriber(ctx context.Context, sub subscriptiondao.Subscription, payload json.RawMessage) error {
-	msg, err := NextMessage(sub.ClientSubID, json.RawMessage(payload))
+func (d *Dispatcher) sendToSubscriber(ctx context.Context, sub subscriptiondao.Subscription, payload json.RawMessage, messageID string) error {
+	msg, err := NextMessage(sub.ClientSubID, json.RawMessage(payload), messageID)
 	if err != nil {
 		return fmt.Errorf("building next message: %w", err)
 	}
@@ -153,6 +157,9 @@ func (d *Dispatcher) getManagementClient(endpoint string) apigatewaymanagementap
 // isGoneException checks if the error is a GoneException (HTTP 410),
 // indicating the WebSocket connection no longer exists.
 func isGoneException(err error) bool {
-	return strings.Contains(err.Error(), "GoneException") ||
-		strings.Contains(err.Error(), "410")
+	var awsErr awserr.Error
+	if errors.As(err, &awsErr) {
+		return awsErr.Code() == "GoneException"
+	}
+	return false
 }

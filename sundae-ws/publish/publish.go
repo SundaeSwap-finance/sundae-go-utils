@@ -12,9 +12,12 @@ import (
 )
 
 // Envelope is the message format published to the WebSocket events stream.
+// MessageID is a caller-provided idempotency key (e.g., transaction hash,
+// slot+pool ID) that is passed through to WebSocket clients for deduplication.
 type Envelope struct {
-	Topic   string          `json:"topic"`
-	Payload json.RawMessage `json:"payload"`
+	Topic     string          `json:"topic"`
+	MessageID string          `json:"messageId"`
+	Payload   json.RawMessage `json:"payload"`
 }
 
 // Publisher publishes events to the WebSocket Kinesis stream.
@@ -44,17 +47,21 @@ func StreamName(env string) string {
 	return env + "-sundae-ws-events"
 }
 
-// Send publishes an event to the WebSocket events stream. The topic is used as
-// the Kinesis partition key to preserve ordering within a topic.
-func (p *Publisher) Send(ctx context.Context, topic string, payload interface{}) error {
+// Send publishes an event to the WebSocket events stream. The messageID should
+// be a stable idempotency key derived from the event's natural identity (e.g.,
+// transaction hash, slot number + pool ID) so that retries produce the same ID.
+// The topic is used as the Kinesis partition key to preserve ordering within a
+// topic.
+func (p *Publisher) Send(ctx context.Context, topic string, messageID string, payload interface{}) error {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshalling payload: %w", err)
 	}
 
 	envelope := Envelope{
-		Topic:   topic,
-		Payload: payloadBytes,
+		Topic:     topic,
+		MessageID: messageID,
+		Payload:   payloadBytes,
 	}
 
 	data, err := json.Marshal(envelope)
