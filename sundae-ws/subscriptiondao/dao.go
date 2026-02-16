@@ -3,6 +3,7 @@ package subscriptiondao
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -88,14 +89,27 @@ func (d *DAO) DeleteByConnection(ctx context.Context, connectionID string) error
 			}
 		}
 
-		input := &dynamodb.BatchWriteItemInput{
-			RequestItems: map[string][]*dynamodb.WriteRequest{
-				d.tableName: writeRequests,
-			},
+		unprocessed := map[string][]*dynamodb.WriteRequest{
+			d.tableName: writeRequests,
 		}
 
-		if _, err := d.api.BatchWriteItemWithContext(ctx, input); err != nil {
-			return fmt.Errorf("failed to batch delete subscriptions for connection %v: %w", connectionID, err)
+		const maxRetries = 5
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			output, err := d.api.BatchWriteItemWithContext(ctx, &dynamodb.BatchWriteItemInput{
+				RequestItems: unprocessed,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to batch delete subscriptions for connection %v: %w", connectionID, err)
+			}
+			if len(output.UnprocessedItems) == 0 {
+				break
+			}
+			unprocessed = output.UnprocessedItems
+			if attempt < maxRetries-1 {
+				time.Sleep(time.Duration(1<<attempt) * 100 * time.Millisecond)
+			} else {
+				return fmt.Errorf("failed to delete all subscriptions for connection %v: %d items unprocessed after %d retries", connectionID, len(unprocessed[d.tableName]), maxRetries)
+			}
 		}
 	}
 
