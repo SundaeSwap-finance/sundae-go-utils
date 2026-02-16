@@ -80,17 +80,33 @@ func (d *Dispatcher) processRecord(ctx context.Context, record events.KinesisEve
 		concurrency = 50
 	}
 
-	g, ctx := errgroup.WithContext(ctx)
+	var g errgroup.Group
 	g.SetLimit(concurrency)
 
+	var (
+		errMu    sync.Mutex
+		firstErr error
+	)
 	for _, sub := range subs {
 		sub := sub
 		g.Go(func() error {
-			return d.sendToSubscriber(ctx, sub, envelope.Payload, envelope.MessageID)
+			if err := d.sendToSubscriber(ctx, sub, envelope.Payload, envelope.MessageID); err != nil {
+				d.Logger.Error().Err(err).
+					Str("connection_id", sub.ConnectionID).
+					Str("topic", envelope.Topic).
+					Msg("failed to send to subscriber")
+				errMu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				errMu.Unlock()
+			}
+			return nil // don't cancel other sends
 		})
 	}
 
-	return g.Wait()
+	g.Wait()
+	return firstErr
 }
 
 func (d *Dispatcher) sendToSubscriber(ctx context.Context, sub subscriptiondao.Subscription, payload json.RawMessage, messageID string) error {

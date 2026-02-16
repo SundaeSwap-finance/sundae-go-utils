@@ -106,7 +106,14 @@ func (d *DAO) DeleteByConnection(ctx context.Context, connectionID string) error
 			}
 			unprocessed = output.UnprocessedItems
 			if attempt < maxRetries-1 {
-				time.Sleep(time.Duration(1<<attempt) * 100 * time.Millisecond)
+				backoff := time.Duration(1<<attempt) * 100 * time.Millisecond
+				timer := time.NewTimer(backoff)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return fmt.Errorf("context cancelled during retry for connection %v: %w", connectionID, ctx.Err())
+				case <-timer.C:
+				}
 			} else {
 				return fmt.Errorf("failed to delete all subscriptions for connection %v: %d items unprocessed after %d retries", connectionID, len(unprocessed[d.tableName]), maxRetries)
 			}

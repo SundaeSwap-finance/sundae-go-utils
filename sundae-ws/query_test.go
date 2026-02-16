@@ -7,9 +7,9 @@ import (
 )
 
 func TestSimpleExtractSubscriptionField(t *testing.T) {
-	t.Run("basic subscription", func(t *testing.T) {
+	t.Run("basic subscription with variables", func(t *testing.T) {
 		field, args, err := SimpleExtractSubscriptionField(SubscribePayload{
-			Query:     `subscription { poolUpdated(id: "abc") { poolId quantityA } }`,
+			Query:     `subscription($id: ID!) { poolUpdated(id: $id) { poolId quantityA } }`,
 			Variables: map[string]interface{}{"id": "abc"},
 		})
 		assert.NoError(t, err)
