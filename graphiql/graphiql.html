@@ -78,9 +78,11 @@
         },
       };
 
-      const fetcher = createGraphiQLFetcher({
-        url: '{{.Route}}',
-      });
+      const fetcherOpts = { url: '{{.Route}}' };
+      {{ if .SubscriptionURL }}
+      fetcherOpts.subscriptionUrl = '{{.SubscriptionURL}}';
+      {{ end }}
+      const fetcher = createGraphiQLFetcher(fetcherOpts);
       const plugins = [HISTORY_PLUGIN, explorerPlugin()];
 
       function App() {
