@@ -122,10 +122,15 @@ func (r *Replayer) Run(ctx context.Context) error {
 				}
 				n := processed.Add(1)
 				if n == 1 || n%progressInterval == 0 {
+					ws := r.tracker.WaitStats()
 					r.logger.Info().
 						Uint64("processed", n).
 						Uint64("height", rec.Height).
 						Uint64("watermark", r.tracker.Watermark()).
+						Uint64("waitTxCalls", ws.TxCalls).
+						Uint64("waitTxBlocked", ws.TxBlocked).
+						Uint64("waitTxBailouts", ws.TxBailouts).
+						Str("waitTxTime", ws.TxWaitTime.Round(time.Millisecond).String()).
 						Msg("Replay progress")
 				}
 			}
@@ -136,7 +141,14 @@ func (r *Replayer) Run(ctx context.Context) error {
 	producerDone.Wait()
 
 	total := processed.Load()
-	r.logger.Info().Uint64("total", total).Msg("Replay complete")
+	ws := r.tracker.WaitStats()
+	r.logger.Info().
+		Uint64("total", total).
+		Uint64("waitTxCalls", ws.TxCalls).
+		Uint64("waitTxBlocked", ws.TxBlocked).
+		Uint64("waitTxBailouts", ws.TxBailouts).
+		Str("waitTxTime", ws.TxWaitTime.Round(time.Millisecond).String()).
+		Msg("Replay complete")
 
 	if workerErr != nil {
 		return workerErr
@@ -144,62 +156,99 @@ func (r *Replayer) Run(ctx context.Context) error {
 	return producerErr
 }
 
-// produceHeights queries the lookup table for consecutive heights and sends
-// them to the work channel. Stops when a height is not found (past the tip).
+// produceHeights queries the lookup table for consecutive heights using
+// BatchGetItem (up to 100 per request) and sends them to the work channel.
+// Stops after maxConsecutiveMisses heights in a row are not found.
 func (r *Replayer) produceHeights(ctx context.Context, work chan<- heightRecord) error {
-	consecutiveMisses := 0
-	const maxConsecutiveMisses = 100 // allow some gaps
+	const batchSize = 100
+	const maxConsecutiveMisses = 100
 
-	for height := r.config.StartHeight; ; height++ {
+	consecutiveMisses := 0
+	height := r.config.StartHeight
+	first := true
+
+	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 
-		pk := fmt.Sprintf("height:%d", height)
-		result, err := r.api.GetItemWithContext(ctx, &dynamodb.GetItemInput{
-			TableName: aws.String(r.config.LookupTable),
-			Key: map[string]*dynamodb.AttributeValue{
-				"pk": {S: aws.String(pk)},
+		// Build batch of up to batchSize keys
+		batchEnd := height + batchSize
+		keys := make([]map[string]*dynamodb.AttributeValue, 0, batchSize)
+		for h := height; h < batchEnd; h++ {
+			keys = append(keys, map[string]*dynamodb.AttributeValue{
+				"pk": {S: aws.String(fmt.Sprintf("height:%d", h))},
 				"sk": {S: aws.String("height")},
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("GetItem height %d: %w", height, err)
+			})
 		}
 
-		if result.Item == nil {
-			consecutiveMisses++
-			if consecutiveMisses >= maxConsecutiveMisses {
-				r.logger.Info().Uint64("lastHeight", height-uint64(maxConsecutiveMisses)).Msg("Reached chain tip")
-				return nil
+		// Fetch batch (handle unprocessed keys)
+		found := make(map[uint64]heightRecord) // height → record
+		unprocessed := map[string]*dynamodb.KeysAndAttributes{
+			r.config.LookupTable: {Keys: keys},
+		}
+		for len(unprocessed) > 0 {
+			kna, ok := unprocessed[r.config.LookupTable]
+			if !ok || len(kna.Keys) == 0 {
+				break
 			}
-			// Mark empty heights as done so waiters don't block forever
-			r.tracker.MarkDone(height)
-			continue
+			out, err := r.api.BatchGetItemWithContext(ctx, &dynamodb.BatchGetItemInput{
+				RequestItems: unprocessed,
+			})
+			if err != nil {
+				return fmt.Errorf("BatchGetItem heights %d-%d: %w", height, batchEnd-1, err)
+			}
+			for _, item := range out.Responses[r.config.LookupTable] {
+				rec := heightRecord{}
+				if v := item["pk"]; v != nil && v.S != nil {
+					// Parse height from pk "height:NNNN"
+					fmt.Sscanf(*v.S, "height:%d", &rec.Height)
+				}
+				if v := item["hash"]; v != nil && v.S != nil {
+					rec.Hash = *v.S
+				}
+				if v := item["location"]; v != nil && v.S != nil {
+					rec.Location = *v.S
+				}
+				found[rec.Height] = rec
+			}
+			unprocessed = out.UnprocessedKeys
 		}
-		consecutiveMisses = 0
 
-		rec := heightRecord{Height: height}
-		if v := result.Item["hash"]; v != nil && v.S != nil {
-			rec.Hash = *v.S
-		}
-		if v := result.Item["location"]; v != nil && v.S != nil {
-			rec.Location = *v.S
+		// Process in height order (preserves ordering for the work channel)
+		for h := height; h < batchEnd; h++ {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			rec, ok := found[h]
+			if !ok {
+				consecutiveMisses++
+				if consecutiveMisses >= maxConsecutiveMisses {
+					r.logger.Info().Uint64("lastHeight", h-uint64(maxConsecutiveMisses)).Msg("Reached chain tip")
+					return nil
+				}
+				r.tracker.MarkDone(h)
+				continue
+			}
+			consecutiveMisses = 0
+
+			if first {
+				r.logger.Debug().
+					Uint64("height", h).
+					Str("hash", rec.Hash).
+					Str("location", rec.Location).
+					Msg("First height found")
+				first = false
+			}
+
+			select {
+			case work <- rec:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 
-		if height == r.config.StartHeight {
-			r.logger.Debug().
-				Uint64("height", height).
-				Str("hash", rec.Hash).
-				Str("location", rec.Location).
-				Msg("First height found")
-		}
-
-		select {
-		case work <- rec:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+		height = batchEnd
 	}
 }
 
@@ -323,6 +372,12 @@ type heightTracker struct {
 	watermark   uint64              // all heights <= watermark are done
 	startHeight uint64
 	notify      chan struct{} // closed and recreated on any progress (broadcast)
+
+	// Wait stats (atomic, lock-free)
+	waitTxCalls    atomic.Uint64 // total WaitForTx calls
+	waitTxBlocked  atomic.Uint64 // calls that had to wait at least one cycle
+	waitTxBailouts atomic.Uint64 // calls that bailed out (tx from before replay range)
+	waitTxNanos    atomic.Int64  // cumulative nanoseconds spent blocked in WaitForTx
 }
 
 func newHeightTracker(startHeight uint64) *heightTracker {
@@ -387,6 +442,23 @@ func (ht *heightTracker) Watermark() uint64 {
 	return ht.watermark
 }
 
+// WaitStats returns a snapshot of wait statistics.
+type WaitStats struct {
+	TxCalls    uint64        // total WaitForTx calls
+	TxBlocked  uint64        // calls that actually had to wait
+	TxBailouts uint64        // calls that bailed out (tx from before replay range)
+	TxWaitTime time.Duration // cumulative time spent blocked
+}
+
+func (ht *heightTracker) WaitStats() WaitStats {
+	return WaitStats{
+		TxCalls:    ht.waitTxCalls.Load(),
+		TxBlocked:  ht.waitTxBlocked.Load(),
+		TxBailouts: ht.waitTxBailouts.Load(),
+		TxWaitTime: time.Duration(ht.waitTxNanos.Load()),
+	}
+}
+
 // WaitForHeight blocks until the watermark reaches at least the given height.
 func (ht *heightTracker) WaitForHeight(ctx context.Context, height uint64) error {
 	for {
@@ -420,6 +492,10 @@ func (ht *heightTracker) WaitForHeight(ctx context.Context, height uint64) error
 // watermark), it will NOT be found in the map. This is safe because if
 // the tx was GC'd, its effects are already visible in DynamoDB.
 func (ht *heightTracker) WaitForTx(ctx context.Context, txHash string, currentHeight uint64) error {
+	ht.waitTxCalls.Add(1)
+	start := time.Now()
+	blocked := false
+
 	for {
 		ht.mu.Lock()
 		_, found := ht.txToHeight[txHash]
@@ -428,6 +504,9 @@ func (ht *heightTracker) WaitForTx(ctx context.Context, txHash string, currentHe
 		ht.mu.Unlock()
 
 		if found {
+			if blocked {
+				ht.waitTxNanos.Add(int64(time.Since(start)))
+			}
 			return nil
 		}
 
@@ -435,13 +514,23 @@ func (ht *heightTracker) WaitForTx(ctx context.Context, txHash string, currentHe
 		// it's from before the replay range. Return nil so the caller can
 		// fall through to a DynamoDB query or treat as not-found.
 		if currentHeight > 0 && wm >= currentHeight-1 {
+			ht.waitTxBailouts.Add(1)
+			if blocked {
+				ht.waitTxNanos.Add(int64(time.Since(start)))
+			}
 			return nil
+		}
+
+		if !blocked {
+			blocked = true
+			ht.waitTxBlocked.Add(1)
 		}
 
 		select {
 		case <-ch:
 			continue
 		case <-ctx.Done():
+			ht.waitTxNanos.Add(int64(time.Since(start)))
 			return ctx.Err()
 		}
 	}

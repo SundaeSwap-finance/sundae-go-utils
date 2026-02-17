@@ -97,7 +97,16 @@ func (h *Handler) handleConnect(ctx context.Context, logger zerolog.Logger, req 
 	}
 
 	logger.Info().Msg("connection established")
-	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+
+	resp := events.APIGatewayProxyResponse{StatusCode: 200}
+
+	// Echo back the requested sub-protocol so browsers accept the connection.
+	// graphql-ws clients send "graphql-transport-ws".
+	if proto := req.Headers["sec-websocket-protocol"]; proto != "" {
+		resp.Headers = map[string]string{"Sec-WebSocket-Protocol": proto}
+	}
+
+	return resp, nil
 }
 
 func (h *Handler) handleDisconnect(ctx context.Context, logger zerolog.Logger, req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
