@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/SundaeSwap-finance/sundae-go-utils/sundae-ws/connectiondao"
+	"github.com/SundaeSwap-finance/sundae-go-utils/sundae-ws/latestdao"
 	"github.com/SundaeSwap-finance/sundae-go-utils/sundae-ws/subscriptiondao"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go/aws"
@@ -32,6 +33,7 @@ type Handler struct {
 	ExtractField SubscriptionFieldExtractor
 	Logger       zerolog.Logger
 	ConnTTL      time.Duration // TTL for connection records (default 2 hours)
+	LatestCache  *latestdao.DAO // optional; sends cached initial message on subscribe
 
 	mgmtMu      sync.RWMutex
 	mgmtClients map[string]apigatewaymanagementapiiface.ApiGatewayManagementApiAPI
@@ -233,6 +235,24 @@ func (h *Handler) handleSubscribe(ctx context.Context, logger zerolog.Logger, co
 		Str("field", fieldName).
 		Str("topic", topic).
 		Msg("subscription created")
+
+	// Send the most recent cached payload as an initial message so the
+	// subscriber doesn't have to wait for the next live event.
+	if h.LatestCache != nil {
+		latest, err := h.LatestCache.Get(ctx, topic)
+		if err != nil {
+			logger.Warn().Err(err).Str("topic", topic).Msg("failed to read latest cache")
+		} else if latest != nil {
+			initMsg, err := NextMessage(msg.ID, json.RawMessage(latest.Payload), latest.MessageID)
+			if err != nil {
+				logger.Warn().Err(err).Msg("failed to build initial message")
+			} else if sendErr := h.postToConnection(ctx, endpoint, connID, initMsg); sendErr != nil {
+				logger.Warn().Err(sendErr).Msg("failed to send initial cached message")
+			} else {
+				logger.Debug().Str("topic", topic).Msg("sent initial cached message")
+			}
+		}
+	}
 
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 }

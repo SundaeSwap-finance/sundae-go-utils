@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
+	"github.com/SundaeSwap-finance/sundae-go-utils/sundae-ws/latestdao"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
@@ -24,6 +26,15 @@ type Envelope struct {
 type Publisher struct {
 	client     kinesisiface.KinesisAPI
 	streamName string
+	cache      *latestdao.DAO
+	cacheTTL   time.Duration
+}
+
+// WithCache configures a latest-value cache for use with SendAndCache.
+func (p *Publisher) WithCache(cache *latestdao.DAO, ttl time.Duration) *Publisher {
+	p.cache = cache
+	p.cacheTTL = ttl
+	return p
 }
 
 // New creates a new Publisher.
@@ -76,6 +87,32 @@ func (p *Publisher) Send(ctx context.Context, topic string, messageID string, pa
 	})
 	if err != nil {
 		return fmt.Errorf("publishing to kinesis stream %v: %w", p.streamName, err)
+	}
+
+	return nil
+}
+
+// SendAndCache publishes to Kinesis and also writes the payload to the
+// latest-value cache so new subscribers get an immediate initial message.
+// Requires WithCache to have been called first.
+func (p *Publisher) SendAndCache(ctx context.Context, topic string, messageID string, payload interface{}) error {
+	if err := p.Send(ctx, topic, messageID, payload); err != nil {
+		return err
+	}
+
+	if p.cache != nil {
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("marshalling payload for cache: %w", err)
+		}
+		if cacheErr := p.cache.Put(ctx, latestdao.Latest{
+			Topic:     topic,
+			Payload:   string(payloadBytes),
+			MessageID: messageID,
+			TTL:       time.Now().Add(p.cacheTTL).Unix(),
+		}); cacheErr != nil {
+			fmt.Printf("warning: failed to cache latest payload for topic %v: %v\n", topic, cacheErr)
+		}
 	}
 
 	return nil
