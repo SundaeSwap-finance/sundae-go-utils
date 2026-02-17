@@ -96,16 +96,18 @@ func (h *Handler) handleConnect(ctx context.Context, logger zerolog.Logger, req 
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
-	logger.Info().Msg("connection established")
-
-	resp := events.APIGatewayProxyResponse{StatusCode: 200}
-
 	// Echo back the requested sub-protocol so browsers accept the connection.
 	// graphql-ws clients send "graphql-transport-ws".
-	if proto := req.Headers["sec-websocket-protocol"]; proto != "" {
+	resp := events.APIGatewayProxyResponse{StatusCode: 200}
+	proto := req.Headers["sec-websocket-protocol"]
+	if proto == "" {
+		proto = req.Headers["Sec-WebSocket-Protocol"]
+	}
+	if proto != "" {
 		resp.Headers = map[string]string{"Sec-WebSocket-Protocol": proto}
 	}
 
+	logger.Info().Str("subprotocol", proto).Msg("connection established")
 	return resp, nil
 }
 
