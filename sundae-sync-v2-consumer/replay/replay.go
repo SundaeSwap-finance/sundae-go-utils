@@ -77,14 +77,19 @@ func (r *Replayer) Run(ctx context.Context) error {
 	// Channel of height records to process
 	work := make(chan heightRecord, r.config.Workers*2)
 
-	// Producer: query heights from DynamoDB and feed into work channel
+	// Workers use a cancellable context so one failure stops everything.
+	workerCtx, cancelWorkers := context.WithCancel(ctx)
+	defer cancelWorkers()
+
+	// Producer: query heights from DynamoDB and feed into work channel.
+	// Uses workerCtx so it stops when workers cancel (avoids deadlock).
 	var producerErr error
 	var producerDone sync.WaitGroup
 	producerDone.Add(1)
 	go func() {
 		defer producerDone.Done()
 		defer close(work)
-		producerErr = r.produceHeights(ctx, work)
+		producerErr = r.produceHeights(workerCtx, work)
 	}()
 
 	// Workers: process blocks in parallel
@@ -93,8 +98,11 @@ func (r *Replayer) Run(ctx context.Context) error {
 	var workerErrOnce sync.Once
 	var workers sync.WaitGroup
 
-	workerCtx, cancelWorkers := context.WithCancel(ctx)
-	defer cancelWorkers()
+	// Log every ~10 seconds of work: scale interval with worker count
+	progressInterval := uint64(100 * r.config.Workers)
+	if progressInterval < 100 {
+		progressInterval = 100
+	}
 
 	for i := 0; i < r.config.Workers; i++ {
 		workers.Add(1)
@@ -107,12 +115,13 @@ func (r *Replayer) Run(ctx context.Context) error {
 				if err := r.processHeight(workerCtx, rec); err != nil {
 					workerErrOnce.Do(func() {
 						workerErr = fmt.Errorf("height %d: %w", rec.Height, err)
+						r.logger.Error().Err(workerErr).Uint64("height", rec.Height).Msg("Worker error")
 						cancelWorkers()
 					})
 					return
 				}
 				n := processed.Add(1)
-				if n%1000 == 0 {
+				if n == 1 || n%progressInterval == 0 {
 					r.logger.Info().
 						Uint64("processed", n).
 						Uint64("height", rec.Height).
@@ -178,6 +187,14 @@ func (r *Replayer) produceHeights(ctx context.Context, work chan<- heightRecord)
 			rec.Location = *v.S
 		}
 
+		if height == r.config.StartHeight {
+			r.logger.Debug().
+				Uint64("height", height).
+				Str("hash", rec.Hash).
+				Str("location", rec.Location).
+				Msg("First height found")
+		}
+
 		select {
 		case work <- rec:
 		case <-ctx.Done():
@@ -191,6 +208,8 @@ func (r *Replayer) produceHeights(ctx context.Context, work chan<- heightRecord)
 func (r *Replayer) processHeight(ctx context.Context, rec heightRecord) error {
 	// Load block from filesystem
 	blockPath := filepath.Join(r.config.BlockDir, rec.Location)
+	r.logger.Debug().Uint64("height", rec.Height).Str("path", blockPath).Msg("Loading block")
+
 	contents, err := os.ReadFile(blockPath)
 	if err != nil {
 		return fmt.Errorf("read block %s: %w", blockPath, err)
@@ -208,9 +227,18 @@ func (r *Replayer) processHeight(ctx context.Context, rec heightRecord) error {
 	}
 
 	slot := block.SlotNumber()
+	txCount := len(block.Transactions())
 
-	// Inject replay context so AdvanceFunc can call WaitForHeight
+	r.logger.Debug().
+		Uint64("height", rec.Height).
+		Uint64("slot", slot).
+		Int("txCount", txCount).
+		Int("bytes", len(contents)).
+		Msg("Block loaded")
+
+	// Inject replay context so AdvanceFunc can call WaitForHeight/WaitForTx
 	rctx := context.WithValue(ctx, replayContextKey{}, r.tracker)
+	rctx = context.WithValue(rctx, replayHeightKey{}, rec.Height)
 
 	// Process each transaction
 	for txIdx, tx := range block.Transactions() {
@@ -233,6 +261,7 @@ func (r *Replayer) processHeight(ctx context.Context, rec heightRecord) error {
 // --- Public API for AdvanceFuncs ---
 
 type replayContextKey struct{}
+type replayHeightKey struct{}
 
 // WaitForHeight blocks until all blocks at or below the given height have
 // been fully processed. Call this from within an AdvanceFunc when you discover
@@ -254,6 +283,10 @@ func WaitForHeight(ctx context.Context, height uint64) error {
 // with the input's transaction hash to ensure the producing transaction
 // has been fully processed.
 //
+// If the transaction is from before the replay range (never processed),
+// WaitForTx returns nil once the watermark confirms all earlier blocks
+// have been processed, so the caller can safely fall through.
+//
 // If called outside of a replay context (e.g. during live Kinesis consumption),
 // this is a no-op and returns nil immediately.
 func WaitForTx(ctx context.Context, txHash string) error {
@@ -261,7 +294,8 @@ func WaitForTx(ctx context.Context, txHash string) error {
 	if !ok {
 		return nil // not in replay mode, no-op
 	}
-	return tracker.WaitForTx(ctx, txHash)
+	currentHeight, _ := ctx.Value(replayHeightKey{}).(uint64)
+	return tracker.WaitForTx(ctx, txHash, currentHeight)
 }
 
 // IsReplay returns true if the context is running inside a replay.
@@ -377,18 +411,30 @@ func (ht *heightTracker) WaitForHeight(ctx context.Context, height uint64) error
 // WaitForTx blocks until the given transaction hash has been processed.
 // The tx is considered processed once MarkTxProcessed has been called for it.
 //
+// currentHeight is the block height currently being processed by the caller.
+// Once the watermark reaches currentHeight-1 (all earlier blocks are done)
+// and the tx still isn't found, WaitForTx returns nil — the tx is from
+// before the replay range and its effects are already in DynamoDB.
+//
 // If the tx was already processed and GC'd (its height fell below the
 // watermark), it will NOT be found in the map. This is safe because if
-// the tx was GC'd, its effects are already visible in DynamoDB — the caller's
-// subsequent database query will succeed without needing to wait.
-func (ht *heightTracker) WaitForTx(ctx context.Context, txHash string) error {
+// the tx was GC'd, its effects are already visible in DynamoDB.
+func (ht *heightTracker) WaitForTx(ctx context.Context, txHash string, currentHeight uint64) error {
 	for {
 		ht.mu.Lock()
 		_, found := ht.txToHeight[txHash]
+		wm := ht.watermark
 		ch := ht.notify
 		ht.mu.Unlock()
 
 		if found {
+			return nil
+		}
+
+		// If all blocks before ours are done and the tx still isn't found,
+		// it's from before the replay range. Return nil so the caller can
+		// fall through to a DynamoDB query or treat as not-found.
+		if currentHeight > 0 && wm >= currentHeight-1 {
 			return nil
 		}
 

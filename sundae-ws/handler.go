@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -76,7 +77,7 @@ func (h *Handler) HandleEvent(ctx context.Context, req events.APIGatewayWebsocke
 
 func (h *Handler) handleConnect(ctx context.Context, logger zerolog.Logger, req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
 	connID := req.RequestContext.ConnectionID
-	endpoint := fmt.Sprintf("https://%s/%s", req.RequestContext.DomainName, req.RequestContext.Stage)
+	endpoint := managementEndpoint(req)
 
 	ttl := h.ConnTTL
 	if ttl == 0 {
@@ -122,7 +123,7 @@ func (h *Handler) handleMessage(ctx context.Context, logger zerolog.Logger, req 
 	}
 
 	connID := req.RequestContext.ConnectionID
-	endpoint := fmt.Sprintf("https://%s/%s", req.RequestContext.DomainName, req.RequestContext.Stage)
+	endpoint := managementEndpoint(req)
 
 	switch msg.Type {
 	case MsgConnectionInit:
@@ -241,6 +242,17 @@ func (h *Handler) postToConnection(ctx context.Context, endpoint, connID string,
 		Data:         data,
 	})
 	return err
+}
+
+// managementEndpoint returns the correct callback URL for the API Gateway
+// Management API. Custom domains already include the stage via the API mapping,
+// so only raw execute-api domains need the stage appended.
+func managementEndpoint(req events.APIGatewayWebsocketProxyRequest) string {
+	domain := req.RequestContext.DomainName
+	if strings.Contains(domain, ".execute-api.") {
+		return fmt.Sprintf("https://%s/%s", domain, req.RequestContext.Stage)
+	}
+	return fmt.Sprintf("https://%s", domain)
 }
 
 func (h *Handler) getManagementClient(endpoint string) apigatewaymanagementapiiface.ApiGatewayManagementApiAPI {
