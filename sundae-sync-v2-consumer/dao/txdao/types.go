@@ -1,6 +1,8 @@
 package txdao
 
 import (
+	"encoding/base64"
+
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync/num"
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/shared"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -23,11 +25,23 @@ type Policy struct {
 }
 
 type UTxO struct {
-	Address  string   `dynamodbav:"address"`            // base64 encoded
-	Coin     string   `dynamodbav:"coin"`               // lovelace
-	Assets   []Policy `dynamodbav:"assets"`
-	DatumCBOR []byte `dynamodbav:"datum_cbor,omitempty"` // raw datum CBOR
+	Address   string   `dynamodbav:"address"`          // base64 encoded
+	Coin      string   `dynamodbav:"coin"`             // lovelace
+	Assets    []Policy `dynamodbav:"assets"`
+	DatumB64  string   `dynamodbav:"datum,omitempty"`  // base64-encoded datum CBOR
 	// TODO: script!
+}
+
+// DatumCBOR returns the decoded datum CBOR bytes, or nil if not present.
+func (u UTxO) DatumCBOR() []byte {
+	if u.DatumB64 == "" {
+		return nil
+	}
+	b, err := base64.StdEncoding.DecodeString(u.DatumB64)
+	if err != nil {
+		return nil
+	}
+	return b
 }
 
 func (u UTxO) Value() shared.Value {
