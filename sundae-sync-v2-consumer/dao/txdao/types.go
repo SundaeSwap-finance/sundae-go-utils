@@ -23,10 +23,11 @@ type Policy struct {
 }
 
 type UTxO struct {
-	Address string   `dynamodbav:"address"` // base64 encoded
-	Coin    string   `dynamodbav:"coin"`    // lovelace
-	Assets  []Policy `dynamodbav:"assets"`
-	// TODO: datum, script!
+	Address  string   `dynamodbav:"address"`            // base64 encoded
+	Coin     string   `dynamodbav:"coin"`               // lovelace
+	Assets   []Policy `dynamodbav:"assets"`
+	DatumCBOR []byte `dynamodbav:"datum_cbor,omitempty"` // raw datum CBOR
+	// TODO: script!
 }
 
 func (u UTxO) Value() shared.Value {
