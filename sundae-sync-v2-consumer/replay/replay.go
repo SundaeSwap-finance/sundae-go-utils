@@ -98,10 +98,13 @@ func (r *Replayer) Run(ctx context.Context) error {
 	var workerErrOnce sync.Once
 	var workers sync.WaitGroup
 
-	// Log every ~10 seconds of work: scale interval with worker count
+	// Log every ~10 seconds of work: scale interval with worker count, cap at 10k
 	progressInterval := uint64(100 * r.config.Workers)
 	if progressInterval < 100 {
 		progressInterval = 100
+	}
+	if progressInterval > 10000 {
+		progressInterval = 10000
 	}
 
 	for i := 0; i < r.config.Workers; i++ {
