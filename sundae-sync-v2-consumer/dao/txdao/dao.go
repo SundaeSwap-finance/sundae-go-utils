@@ -3,6 +3,7 @@ package txdao
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/rs/zerolog"
@@ -12,24 +13,26 @@ import (
 type DAO struct {
 	logger zerolog.Logger
 	table  *ddb.Table
-	cache  map[string]Tx
+	cache  sync.Map
 	dry    bool
 }
 
 func New(api dynamodbiface.DynamoDBAPI, tableName string, logger zerolog.Logger, dry bool) *DAO {
-	return &DAO{table: ddb.New(api).MustTable(tableName, &Tx{}), logger: logger, cache: make(map[string]Tx), dry: dry}
+	return &DAO{table: ddb.New(api).MustTable(tableName, &Tx{}), logger: logger, dry: dry}
 }
 
 func (dao *DAO) Get(ctx context.Context, hash string) (Tx, error) {
-	if tx, ok := dao.cache[hash]; ok {
-		return tx, nil
+	if v, ok := dao.cache.Load(hash); ok {
+		return v.(Tx), nil
 	}
+
 	var tx Tx
 	err := dao.table.Get(fmt.Sprintf("tx:%v", hash)).Range("tx").ScanWithContext(ctx, &tx)
 	if err != nil {
 		return Tx{}, fmt.Errorf("failed to fetch transaction: %w", err)
 	}
-	dao.cache[hash] = tx
+
+	dao.cache.Store(hash, tx)
 	return tx, err
 }
 
