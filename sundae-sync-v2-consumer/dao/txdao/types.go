@@ -2,6 +2,7 @@ package txdao
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync/num"
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/shared"
@@ -51,8 +52,18 @@ func (u UTxO) Value() shared.Value {
 	}
 	value := shared.CreateAdaValue(ada.Int64())
 	for _, policy := range u.Assets {
+		policyBytes, err := base64.StdEncoding.DecodeString(policy.PolicyID)
+		if err != nil {
+			panic("invalid policy base64: " + policy.PolicyID)
+		}
+		policyHex := hex.EncodeToString(policyBytes)
 		for _, asset := range policy.Assets {
-			assetId := shared.FromSeparate(policy.PolicyID, asset.Name)
+			nameBytes, err := base64.StdEncoding.DecodeString(asset.Name)
+			if err != nil {
+				panic("invalid asset name base64: " + asset.Name)
+			}
+			nameHex := hex.EncodeToString(nameBytes)
+			assetId := shared.FromSeparate(policyHex, nameHex)
 			qty, ok := num.New(asset.OutputCoin)
 			if !ok {
 				panic("invalid utxo")
