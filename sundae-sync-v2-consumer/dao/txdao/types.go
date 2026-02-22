@@ -25,20 +25,43 @@ type Policy struct {
 	Assets   []Asset `dynamodbav:"assets"`
 }
 
+// DatumField handles two DynamoDB formats for the datum field:
+//   - Legacy: a plain base64 string of the CBOR bytes
+//   - Current: a Map with "originalCbor" (base64), "hash", and "payload" keys
+type DatumField struct {
+	B64 string // base64-encoded datum CBOR, populated from either format
+}
+
+func (d *DatumField) UnmarshalDynamoDBAttributeValue(item *dynamodb.AttributeValue) error {
+	if item == nil {
+		return nil
+	}
+	if item.S != nil {
+		d.B64 = *item.S
+		return nil
+	}
+	if item.M != nil {
+		if oc, ok := item.M["originalCbor"]; ok && oc.S != nil {
+			d.B64 = *oc.S
+		}
+		return nil
+	}
+	return nil
+}
+
 type UTxO struct {
-	Address   string   `dynamodbav:"address"`          // base64 encoded
-	Coin      string   `dynamodbav:"coin"`             // lovelace
-	Assets    []Policy `dynamodbav:"assets"`
-	DatumB64  string   `dynamodbav:"datum,omitempty"`  // base64-encoded datum CBOR
-	// TODO: script!
+	Address string     `dynamodbav:"address"`         // base64 encoded
+	Coin    string     `dynamodbav:"coin"`            // lovelace
+	Assets  []Policy   `dynamodbav:"assets"`
+	Datum   DatumField `dynamodbav:"datum,omitempty"`
 }
 
 // DatumCBOR returns the decoded datum CBOR bytes, or nil if not present.
 func (u UTxO) DatumCBOR() []byte {
-	if u.DatumB64 == "" {
+	if u.Datum.B64 == "" {
 		return nil
 	}
-	b, err := base64.StdEncoding.DecodeString(u.DatumB64)
+	b, err := base64.StdEncoding.DecodeString(u.Datum.B64)
 	if err != nil {
 		return nil
 	}
