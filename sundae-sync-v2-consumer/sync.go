@@ -18,6 +18,7 @@ type Syncer struct {
 	Downloader Downloader
 	Events     chan Message
 	Group      *errgroup.Group
+	ctx        context.Context // errgroup context; cancelled when sync goroutine exits with error
 }
 
 type Block struct {
@@ -35,6 +36,7 @@ type UndoFunc func(ctx context.Context, tx ledger.Transaction, slot uint64) erro
 type AdvanceFunc func(ctx context.Context, tx ledger.Transaction, slot uint64, txIndex int) error
 
 func (h *Syncer) SpawnSyncFunc(group *errgroup.Group, ctx context.Context, undoFunc UndoFunc, advanceFunc AdvanceFunc) {
+	h.ctx = ctx
 	group.Go(func() (err error) {
 		// For every event we receive
 		for event := range h.Events {
@@ -113,6 +115,13 @@ func (h *Syncer) HandleOne(data []byte) chan error {
 	}
 	h.Group.Go(func() error { return h.Downloader.DownloadBlock(message.Advance.Hash, message.Advance.Contents) })
 
-	h.Events <- message
+	// Use select to avoid deadlock if the sync goroutine has exited (e.g. from
+	// a previous error). When the errgroup context is cancelled, the sync
+	// goroutine is no longer reading from h.Events.
+	select {
+	case h.Events <- message:
+	case <-h.ctx.Done():
+		finished <- fmt.Errorf("sync goroutine no longer running: %w", h.ctx.Err())
+	}
 	return finished
 }
