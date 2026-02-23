@@ -6,6 +6,7 @@ import (
 
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync/num"
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/shared"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
@@ -15,9 +16,45 @@ type Datum struct {
 	Payload      dynamodb.AttributeValue
 }
 
+// CoinValue handles DynamoDB values that might be stored as:
+//   - String (S): plain decimal string
+//   - Number (N): DynamoDB number
+//   - Map (M): serde_dynamo's num serialization {"int": {"S": "..."}}
+type CoinValue struct {
+	Value string
+}
+
+func (c *CoinValue) UnmarshalDynamoDBAttributeValue(item *dynamodb.AttributeValue) error {
+	if item == nil {
+		return nil
+	}
+	if item.S != nil {
+		c.Value = aws.StringValue(item.S)
+		return nil
+	}
+	if item.N != nil {
+		c.Value = aws.StringValue(item.N)
+		return nil
+	}
+	if item.M != nil {
+		// serde_dynamo serializes Rust numeric types as {"int": {"S": "..."}} or {"int": {"N": "..."}}
+		if intVal, ok := item.M["int"]; ok {
+			if intVal.S != nil {
+				c.Value = aws.StringValue(intVal.S)
+				return nil
+			}
+			if intVal.N != nil {
+				c.Value = aws.StringValue(intVal.N)
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
 type Asset struct {
-	Name       string `dynamodbav:"name"` // base64 encoded token name
-	OutputCoin string `dynamodbav:"outputCoin"`
+	Name       string    `dynamodbav:"name"` // base64 encoded token name
+	OutputCoin CoinValue `dynamodbav:"outputCoin"`
 }
 
 type Policy struct {
@@ -87,9 +124,9 @@ func (u UTxO) Value() shared.Value {
 			}
 			nameHex := hex.EncodeToString(nameBytes)
 			assetId := shared.FromSeparate(policyHex, nameHex)
-			qty, ok := num.New(asset.OutputCoin)
+			qty, ok := num.New(asset.OutputCoin.Value)
 			if !ok {
-				panic("invalid utxo")
+				panic("invalid utxo: outputCoin=" + asset.OutputCoin.Value)
 			}
 			value.AddAsset(shared.Coin{AssetId: assetId, Amount: qty})
 		}
