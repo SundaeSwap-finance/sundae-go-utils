@@ -39,8 +39,18 @@ func (d DateTime) Format(args struct{ Layout string }) string {
 }
 
 const (
-	SlotOffsetPreview = 1666656000
-	SlotOffsetMainnet = 1591566291
+	// ┌─────────┬────────────┬───────────────┬───────────────────────────────────────────────────────────────────────┐
+	// │ Network │ Byron era  │  systemStart  │                          Offset calculation                           │
+	// ├─────────┼────────────┼───────────────┼───────────────────────────────────────────────────────────────────────┤
+	// │ Preview │ None       │ 1 666 656 000 │ offset = systemStart (slot 0 = start) = 1 666 656 000                 │
+	// ├─────────┼────────────┼───────────────┼───────────────────────────────────────────────────────────────────────┤
+	// │ Preprod │ 4 epochs   │ 1 654 041 600 │ offset = 1 654 041 600 + (86 400 × 20) - 86 400 = 1 655 683 200       │
+	// ├─────────┼────────────┼───────────────┼───────────────────────────────────────────────────────────────────────┤
+	// │ Mainnet │ 208 epochs │ 1 506 203 091 │ offset = 1 506 203 091 + (4 492 800 × 20) - 4 492 800 = 1 591 566 291 │
+	// └─────────┴────────────┴───────────────┴───────────────────────────────────────────────────────────────────────┘
+	SlotOffsetPreview = 1_666_656_000
+	SlotOffsetPreprod = 1_655_683_200
+	SlotOffsetMainnet = 1_591_566_291
 )
 
 func NetworkToSlotOffset(network string) (uint64, error) {
@@ -50,6 +60,8 @@ func NetworkToSlotOffset(network string) (uint64, error) {
 	switch network {
 	case "preview":
 		return SlotOffsetPreview, nil
+	case "preprod":
+		return SlotOffsetPreprod, nil
 	case "mainnet", "cardano-tom":
 		return SlotOffsetMainnet, nil
 	default:
