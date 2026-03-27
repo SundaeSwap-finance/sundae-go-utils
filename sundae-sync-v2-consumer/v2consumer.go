@@ -29,19 +29,25 @@ import (
 )
 
 var SyncV2ConsumerOpts struct {
-	Transaction string
-	Stream      string
-	Account     string
-	Timestamp   cli.Timestamp
+	Transaction     string
+	TransactionCbor string
+	Slot            uint64
+	Stream          string
+	Account         string
+	Timestamp       cli.Timestamp
 }
 
-var TransactionFlag = sundaecli.StringFlag("transaction", "Replay just one transaction", &SyncV2ConsumerOpts.Transaction)
+var TransactionFlag = sundaecli.StringFlag("transaction", "Replay just one transaction (requires AWS access)", &SyncV2ConsumerOpts.Transaction)
+var TransactionCborFlag = sundaecli.StringFlag("transaction-cbor", "Hex-encoded transaction CBOR to process directly (no AWS access needed)", &SyncV2ConsumerOpts.TransactionCbor)
+var SlotFlag = sundaecli.Uint64Flag("slot", "Slot number for the transaction (used with --transaction-cbor)", &SyncV2ConsumerOpts.Slot)
 var StreamFlag = sundaecli.StringFlag("kinesis-stream", "The stream name or arn to connect to", &SyncV2ConsumerOpts.Stream)
 var AccountFlag = sundaecli.StringFlag("aws-account", "The AWS Account number, for interpolating S3 buckets", &SyncV2ConsumerOpts.Account)
 var TsFlag = sundaecli.TimestampFlag("kinesis-timestamp", "2006-01-02 15:04:05", "The timestamp to start syncing from", &SyncV2ConsumerOpts.Timestamp)
 
 var CommonFlags = []cli.Flag{
 	TransactionFlag,
+	TransactionCborFlag,
+	SlotFlag,
 	StreamFlag,
 	AccountFlag,
 	TsFlag,
@@ -79,8 +85,26 @@ func New(advance AdvanceFunc, undo UndoFunc, logger *zerolog.Logger) SyncV2Consu
 	return consumer
 }
 
+// NewLite creates a SyncV2Consumer without initializing AWS services.
+// This is useful for local debugging with --transaction-cbor where AWS access is not needed.
+func NewLite(advance AdvanceFunc, undo UndoFunc, logger *zerolog.Logger) SyncV2Consumer {
+	if logger == nil {
+		newLogger := zerolog.New(os.Stdout)
+		logger = &newLogger
+	}
+
+	return SyncV2Consumer{
+		Logger:  *logger,
+		Undo:    undo,
+		Advance: advance,
+	}
+}
+
 func (h *SyncV2Consumer) Start(c *cli.Context) error {
-	if !sundaecli.CommonOpts.Console {
+	if SyncV2ConsumerOpts.TransactionCbor != "" {
+		h.Logger.Info().Msg("Processing transaction from CBOR")
+		return h.RunFromCbor(c)
+	} else if !sundaecli.CommonOpts.Console {
 		h.Logger.Info().Msg("Starting lambda handler")
 		return h.StartLambda(c)
 	} else if SyncV2ConsumerOpts.Stream != "" {
@@ -90,7 +114,7 @@ func (h *SyncV2Consumer) Start(c *cli.Context) error {
 		h.Logger.Info().Msg("Replaying specific transaction")
 		return h.RunOne(c)
 	} else {
-		return fmt.Errorf("Must run as a lambda, or specify --steam or --utxorpc-url")
+		return fmt.Errorf("Must run as a lambda, or specify --kinesis-stream, --transaction, or --transaction-cbor")
 	}
 }
 
@@ -216,5 +240,43 @@ func (h *SyncV2Consumer) RunOne(c *cli.Context) error {
 	if !found {
 		return fmt.Errorf("unable to find transaction %v in block %v", SyncV2ConsumerOpts.Transaction, tx.Block)
 	}
+	return nil
+}
+
+// RunFromCbor parses a transaction from hex-encoded CBOR and invokes the Advance callback.
+// This is useful for local debugging without AWS access.
+func (h *SyncV2Consumer) RunFromCbor(c *cli.Context) error {
+	ctx := c.Context
+	txCborHex := SyncV2ConsumerOpts.TransactionCbor
+	slot := SyncV2ConsumerOpts.Slot
+
+	txCbor, err := hex.DecodeString(txCborHex)
+	if err != nil {
+		return fmt.Errorf("failed to decode transaction CBOR hex: %w", err)
+	}
+
+	txType, err := ledger.DetermineTransactionType(txCbor)
+	if err != nil {
+		return fmt.Errorf("failed to determine transaction type: %w", err)
+	}
+
+	tx, err := ledger.NewTransactionFromCbor(txType, txCbor)
+	if err != nil {
+		return fmt.Errorf("failed to parse transaction from CBOR: %w", err)
+	}
+
+	h.Logger.Info().
+		Str("txId", tx.Hash().String()).
+		Uint64("slot", slot).
+		Uint("txType", txType).
+		Int("numInputs", len(tx.Inputs())).
+		Int("numOutputs", len(tx.Outputs())).
+		Msg("Parsed transaction from CBOR")
+
+	if err := h.Advance(ctx, tx, slot, 0); err != nil {
+		return fmt.Errorf("failed to advance tx: %w", err)
+	}
+
+	h.Logger.Info().Str("txId", tx.Hash().String()).Msg("Transaction processed successfully")
 	return nil
 }
