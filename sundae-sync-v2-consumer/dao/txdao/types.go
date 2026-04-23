@@ -54,11 +54,11 @@ func (c *CoinValue) UnmarshalDynamoDBAttributeValue(item *dynamodb.AttributeValu
 
 type Asset struct {
 	Name       string    `dynamodbav:"name"` // base64 encoded token name
-	OutputCoin CoinValue `dynamodbav:"outputCoin"`
+	OutputCoin CoinValue `dynamodbav:"output_coin"`
 }
 
 type Policy struct {
-	PolicyID string  `dynamodbav:"policyId"` // base64 encoded
+	PolicyID string  `dynamodbav:"policy_id"` // base64 encoded
 	Assets   []Asset `dynamodbav:"assets"`
 }
 
