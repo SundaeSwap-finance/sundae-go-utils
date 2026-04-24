@@ -53,13 +53,64 @@ func (c *CoinValue) UnmarshalDynamoDBAttributeValue(item *dynamodb.AttributeValu
 }
 
 type Asset struct {
-	Name       string    `dynamodbav:"name"` // base64 encoded token name
-	OutputCoin CoinValue `dynamodbav:"output_coin"`
+	Name       string    // base64 encoded token name
+	OutputCoin CoinValue // quantity; primary key "output_coin", legacy key "outputCoin"
+}
+
+// UnmarshalDynamoDBAttributeValue accepts both the current Rust writer format
+// (serde default, snake_case: "output_coin") and the legacy camelCase format
+// ("outputCoin") that coexists in older records on long-lived environments
+// like mainnet. Without this shim, mainnet's pre-rename records unmarshal as
+// empty OutputCoin and panic in Value().
+func (a *Asset) UnmarshalDynamoDBAttributeValue(item *dynamodb.AttributeValue) error {
+	if item == nil || item.M == nil {
+		return nil
+	}
+	if n, ok := item.M["name"]; ok && n.S != nil {
+		a.Name = *n.S
+	}
+	key := "output_coin"
+	if _, ok := item.M[key]; !ok {
+		key = "outputCoin"
+	}
+	if v, ok := item.M[key]; ok {
+		if err := a.OutputCoin.UnmarshalDynamoDBAttributeValue(v); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type Policy struct {
-	PolicyID string  `dynamodbav:"policy_id"` // base64 encoded
-	Assets   []Asset `dynamodbav:"assets"`
+	PolicyID string  // base64 encoded; primary key "policy_id", legacy key "policyId"
+	Assets   []Asset
+}
+
+// UnmarshalDynamoDBAttributeValue accepts both "policy_id" (current snake_case)
+// and "policyId" (legacy camelCase). See Asset.UnmarshalDynamoDBAttributeValue
+// for the motivation.
+func (p *Policy) UnmarshalDynamoDBAttributeValue(item *dynamodb.AttributeValue) error {
+	if item == nil || item.M == nil {
+		return nil
+	}
+	key := "policy_id"
+	if _, ok := item.M[key]; !ok {
+		key = "policyId"
+	}
+	if v, ok := item.M[key]; ok && v.S != nil {
+		p.PolicyID = *v.S
+	}
+	if assets, ok := item.M["assets"]; ok && assets.L != nil {
+		p.Assets = make([]Asset, 0, len(assets.L))
+		for _, el := range assets.L {
+			var a Asset
+			if err := a.UnmarshalDynamoDBAttributeValue(el); err != nil {
+				return err
+			}
+			p.Assets = append(p.Assets, a)
+		}
+	}
+	return nil
 }
 
 // DatumField handles two DynamoDB formats for the datum field:
