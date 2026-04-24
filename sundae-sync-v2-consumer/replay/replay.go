@@ -6,6 +6,17 @@
 // depends on a previous transaction or block having been processed, it calls
 // WaitForTx or WaitForHeight to block until that dependency is satisfied.
 //
+// # Single-machine vs distributed
+//
+// The original Replayer.Run is single-machine: one process, parallel workers
+// over a shared in-memory heightTracker. Use plain New(...) for that.
+//
+// For distributed replays across many machines, plug in a Coordinator (see
+// coordinator.go). The DDB-backed coordinator hands out chunks of the height
+// range to workers atomically and exposes a shared transaction-lookup table
+// so cross-chunk WaitForTx dependencies resolve. Use NewWithCoordinator(...)
+// in that mode.
+//
 // Heights are processed in order from a queue, and dependencies always go
 // backwards (later blocks depend on earlier blocks), so deadlocks cannot occur
 // as long as at least one worker is available to process the blocking height.
@@ -29,14 +40,16 @@ import (
 
 // AdvanceFunc is called for each transaction during replay.
 // It has the same signature as the live syncV2Consumer advance function.
-// Call WaitForHeight from within this function to express a dependency.
+// Call WaitForHeight or WaitForTx from within this function to express a
+// dependency. For relevant transactions in distributed mode, call
+// PublishRelevantTx after work is done so other workers can find it.
 type AdvanceFunc func(ctx context.Context, tx ledger.Transaction, slot uint64, txIndex int) error
 
 // Config configures the block replay.
 type Config struct {
 	BlockDir    string // path to mounted S3 bucket (contains blocks/by-hash/...)
 	LookupTable string // DynamoDB lookup table name (e.g. "{env}-sundae-sync-v2--lookup")
-	StartHeight uint64 // first height to process
+	StartHeight uint64 // first height to process (used as the initial open-ended chunk start in single-machine mode)
 	Workers     int    // number of parallel workers (default 64)
 }
 
@@ -49,14 +62,18 @@ type heightRecord struct {
 
 // Replayer replays archived blocks through an AdvanceFunc in parallel.
 type Replayer struct {
-	api     dynamodbiface.DynamoDBAPI
-	config  Config
-	advance AdvanceFunc
-	logger  zerolog.Logger
-	tracker *heightTracker
+	api         dynamodbiface.DynamoDBAPI
+	config      Config
+	advance     AdvanceFunc
+	logger      zerolog.Logger
+	tracker     *heightTracker
+	coordinator Coordinator
 }
 
-// New creates a new Replayer.
+// New creates a single-machine Replayer that processes from StartHeight
+// until the lookup table runs out of consecutive height records (chain tip).
+//
+// Backward-compatible with the original API.
 func New(api dynamodbiface.DynamoDBAPI, config Config, advance AdvanceFunc, logger zerolog.Logger) *Replayer {
 	if config.Workers <= 0 {
 		config.Workers = 64
@@ -69,36 +86,108 @@ func New(api dynamodbiface.DynamoDBAPI, config Config, advance AdvanceFunc, logg
 	}
 }
 
-// Run processes all blocks from StartHeight until no more heights are found
-// in the lookup table. Returns nil on successful completion.
-func (r *Replayer) Run(ctx context.Context) error {
-	r.tracker = newHeightTracker(r.config.StartHeight)
+// NewWithCoordinator creates a Replayer that uses an external Coordinator
+// for chunk handout. Use this for distributed replays (DDBCoordinator) or for
+// single-machine replays bounded to a specific [start, end) range
+// (InMemoryCoordinator with both ends set).
+func NewWithCoordinator(api dynamodbiface.DynamoDBAPI, config Config, advance AdvanceFunc, coord Coordinator, logger zerolog.Logger) *Replayer {
+	r := New(api, config, advance, logger)
+	r.coordinator = coord
+	return r
+}
 
-	// Channel of height records to process
+// Run processes chunks until the coordinator reports no more work.
+//
+// In backward-compat mode (no coordinator), Run installs an open-ended
+// in-memory coordinator covering [config.StartHeight, ∞) — exactly
+// equivalent to the original behavior.
+func (r *Replayer) Run(ctx context.Context) error {
+	if r.coordinator == nil {
+		r.coordinator = NewInMemoryCoordinator(r.config.StartHeight, 0)
+	}
+	defer r.coordinator.Close()
+
+	var grandTotal atomic.Uint64
+
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		start, end, ok, err := r.coordinator.ClaimChunk(ctx)
+		if err != nil {
+			return fmt.Errorf("claim chunk: %w", err)
+		}
+		if !ok {
+			r.logger.Info().Uint64("total", grandTotal.Load()).Msg("Replay complete: no more chunks")
+			return nil
+		}
+
+		processed, err := r.processChunk(ctx, start, end)
+		if err != nil {
+			return fmt.Errorf("process chunk [%d, %d): %w", start, end, err)
+		}
+		grandTotal.Add(processed)
+
+		if err := r.coordinator.CompleteChunk(ctx, start, end); err != nil {
+			return fmt.Errorf("complete chunk [%d, %d): %w", start, end, err)
+		}
+		r.logger.Info().
+			Uint64("chunk_start", start).
+			Uint64("chunk_end", end).
+			Uint64("processed_in_chunk", processed).
+			Uint64("grand_total", grandTotal.Load()).
+			Msg("Chunk complete")
+	}
+}
+
+// processChunk runs the parallel-worker pipeline over a single chunk
+// [start, end). end=0 means open-ended (run until chain tip / consecutive
+// misses) — only used in single-machine in-memory mode.
+//
+// While the chunk is in progress, a heartbeat goroutine periodically calls
+// coordinator.Heartbeat to keep the lease alive.
+func (r *Replayer) processChunk(ctx context.Context, start, end uint64) (uint64, error) {
+	r.tracker = newHeightTracker(start)
+
 	work := make(chan heightRecord, r.config.Workers*2)
 
-	// Workers use a cancellable context so one failure stops everything.
 	workerCtx, cancelWorkers := context.WithCancel(ctx)
 	defer cancelWorkers()
 
-	// Producer: query heights from DynamoDB and feed into work channel.
-	// Uses workerCtx so it stops when workers cancel (avoids deadlock).
+	// Heartbeat goroutine — every leaseTTL/3, extend the lease.
+	heartbeatDone := make(chan struct{})
+	go func() {
+		defer close(heartbeatDone)
+		ticker := time.NewTicker(LeaseTTL / 3)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-workerCtx.Done():
+				return
+			case <-ticker.C:
+				if err := r.coordinator.Heartbeat(workerCtx, start, end); err != nil {
+					r.logger.Warn().Err(err).Msg("heartbeat failed")
+				}
+			}
+		}
+	}()
+
+	// Producer
 	var producerErr error
 	var producerDone sync.WaitGroup
 	producerDone.Add(1)
 	go func() {
 		defer producerDone.Done()
 		defer close(work)
-		producerErr = r.produceHeights(workerCtx, work)
+		producerErr = r.produceHeights(workerCtx, work, start, end)
 	}()
 
-	// Workers: process blocks in parallel
+	// Workers
 	var processed atomic.Uint64
 	var workerErr error
 	var workerErrOnce sync.Once
 	var workers sync.WaitGroup
 
-	// Log every ~10 seconds of work: scale interval with worker count, cap at 10k
 	progressInterval := uint64(100 * r.config.Workers)
 	if progressInterval < 100 {
 		progressInterval = 100
@@ -142,32 +231,29 @@ func (r *Replayer) Run(ctx context.Context) error {
 
 	workers.Wait()
 	producerDone.Wait()
-
-	total := processed.Load()
-	ws := r.tracker.WaitStats()
-	r.logger.Info().
-		Uint64("total", total).
-		Uint64("waitTxCalls", ws.TxCalls).
-		Uint64("waitTxBlocked", ws.TxBlocked).
-		Uint64("waitTxBailouts", ws.TxBailouts).
-		Str("waitTxTime", ws.TxWaitTime.Round(time.Millisecond).String()).
-		Msg("Replay complete")
+	cancelWorkers()
+	<-heartbeatDone
 
 	if workerErr != nil {
-		return workerErr
+		return processed.Load(), workerErr
 	}
-	return producerErr
+	if producerErr != nil {
+		return processed.Load(), producerErr
+	}
+	return processed.Load(), nil
 }
 
 // produceHeights queries the lookup table for consecutive heights using
 // BatchGetItem (up to 100 per request) and sends them to the work channel.
-// Stops after maxConsecutiveMisses heights in a row are not found.
-func (r *Replayer) produceHeights(ctx context.Context, work chan<- heightRecord) error {
+//
+// chunkStart and chunkEnd bound the range. chunkEnd=0 means open-ended
+// (stop after maxConsecutiveMisses heights in a row not found, i.e. chain tip).
+func (r *Replayer) produceHeights(ctx context.Context, work chan<- heightRecord, chunkStart, chunkEnd uint64) error {
 	const batchSize = 100
 	const maxConsecutiveMisses = 100
 
 	consecutiveMisses := 0
-	height := r.config.StartHeight
+	height := chunkStart
 	first := true
 
 	for {
@@ -175,9 +261,17 @@ func (r *Replayer) produceHeights(ctx context.Context, work chan<- heightRecord)
 			return ctx.Err()
 		}
 
-		// Build batch of up to batchSize keys
+		// Bound the batch by chunkEnd if set
 		batchEnd := height + batchSize
-		keys := make([]map[string]*dynamodb.AttributeValue, 0, batchSize)
+		if chunkEnd > 0 && batchEnd > chunkEnd {
+			batchEnd = chunkEnd
+		}
+		if height >= batchEnd {
+			// Reached chunk end
+			return nil
+		}
+
+		keys := make([]map[string]*dynamodb.AttributeValue, 0, batchEnd-height)
 		for h := height; h < batchEnd; h++ {
 			keys = append(keys, map[string]*dynamodb.AttributeValue{
 				"pk": {S: aws.String(fmt.Sprintf("height:%d", h))},
@@ -185,8 +279,7 @@ func (r *Replayer) produceHeights(ctx context.Context, work chan<- heightRecord)
 			})
 		}
 
-		// Fetch batch (handle unprocessed keys)
-		found := make(map[uint64]heightRecord) // height → record
+		found := make(map[uint64]heightRecord)
 		unprocessed := map[string]*dynamodb.KeysAndAttributes{
 			r.config.LookupTable: {Keys: keys},
 		}
@@ -204,7 +297,6 @@ func (r *Replayer) produceHeights(ctx context.Context, work chan<- heightRecord)
 			for _, item := range out.Responses[r.config.LookupTable] {
 				rec := heightRecord{}
 				if v := item["pk"]; v != nil && v.S != nil {
-					// Parse height from pk "height:NNNN"
 					fmt.Sscanf(*v.S, "height:%d", &rec.Height)
 				}
 				if v := item["hash"]; v != nil && v.S != nil {
@@ -218,7 +310,6 @@ func (r *Replayer) produceHeights(ctx context.Context, work chan<- heightRecord)
 			unprocessed = out.UnprocessedKeys
 		}
 
-		// Process in height order (preserves ordering for the work channel)
 		for h := height; h < batchEnd; h++ {
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -226,7 +317,8 @@ func (r *Replayer) produceHeights(ctx context.Context, work chan<- heightRecord)
 			rec, ok := found[h]
 			if !ok {
 				consecutiveMisses++
-				if consecutiveMisses >= maxConsecutiveMisses {
+				// Open-ended chunk: stop when we've hit too many misses in a row
+				if chunkEnd == 0 && consecutiveMisses >= maxConsecutiveMisses {
 					r.logger.Info().Uint64("lastHeight", h-uint64(maxConsecutiveMisses)).Msg("Reached chain tip")
 					return nil
 				}
@@ -258,7 +350,6 @@ func (r *Replayer) produceHeights(ctx context.Context, work chan<- heightRecord)
 // processHeight loads a block from the filesystem, deserializes it,
 // and calls the advance function for each transaction.
 func (r *Replayer) processHeight(ctx context.Context, rec heightRecord) error {
-	// Load block from filesystem
 	blockPath := filepath.Join(r.config.BlockDir, rec.Location)
 	r.logger.Debug().Uint64("height", rec.Height).Str("path", blockPath).Msg("Loading block")
 
@@ -271,7 +362,6 @@ func (r *Replayer) processHeight(ctx context.Context, rec heightRecord) error {
 		return fmt.Errorf("block file too short: %s", blockPath)
 	}
 
-	// Deserialize: byte 0 = CBOR marker, byte 1 = era, bytes 2+ = block
 	blockType := uint(contents[1])
 	block, err := ledger.NewBlockFromCbor(blockType, contents[2:])
 	if err != nil {
@@ -288,11 +378,10 @@ func (r *Replayer) processHeight(ctx context.Context, rec heightRecord) error {
 		Int("bytes", len(contents)).
 		Msg("Block loaded")
 
-	// Inject replay context so AdvanceFunc can call WaitForHeight/WaitForTx
 	rctx := context.WithValue(ctx, replayContextKey{}, r.tracker)
 	rctx = context.WithValue(rctx, replayHeightKey{}, rec.Height)
+	rctx = context.WithValue(rctx, replayCoordinatorKey{}, r.coordinator)
 
-	// Process each transaction
 	for txIdx, tx := range block.Transactions() {
 		if rctx.Err() != nil {
 			return rctx.Err()
@@ -301,11 +390,9 @@ func (r *Replayer) processHeight(ctx context.Context, rec heightRecord) error {
 		if err := r.advance(rctx, tx, slot, txIdx); err != nil {
 			return fmt.Errorf("tx %s: %w", txHash, err)
 		}
-		// Mark tx as processed so WaitForTx callers in other workers unblock.
 		r.tracker.MarkTxProcessed(txHash, rec.Height)
 	}
 
-	// Mark this height as done (advances watermark, triggers GC of tx entries)
 	r.tracker.MarkDone(rec.Height)
 	return nil
 }
@@ -314,6 +401,7 @@ func (r *Replayer) processHeight(ctx context.Context, rec heightRecord) error {
 
 type replayContextKey struct{}
 type replayHeightKey struct{}
+type replayCoordinatorKey struct{}
 
 // WaitForHeight blocks until all blocks at or below the given height have
 // been fully processed. Call this from within an AdvanceFunc when you discover
@@ -324,34 +412,54 @@ type replayHeightKey struct{}
 func WaitForHeight(ctx context.Context, height uint64) error {
 	tracker, ok := ctx.Value(replayContextKey{}).(*heightTracker)
 	if !ok {
-		return nil // not in replay mode, no-op
+		return nil
 	}
 	return tracker.WaitForHeight(ctx, height)
 }
 
 // WaitForTx blocks until the given transaction has been processed by an
-// AdvanceFunc. This is the primary dependency primitive for UTXO-based
-// consumers: when a transaction consumes an input UTXO, call WaitForTx
-// with the input's transaction hash to ensure the producing transaction
-// has been fully processed.
+// AdvanceFunc. Resolution order:
 //
-// If the transaction is from before the replay range (never processed),
-// WaitForTx returns nil once the watermark confirms all earlier blocks
-// have been processed, so the caller can safely fall through.
+//  1. Local in-memory heightTracker for this chunk (fast, no network).
+//  2. Coordinator.FindTx — for distributed replays, looks in the shared
+//     DDB tx table to see if another worker has processed and published it.
+//  3. If neither finds it and the chunk's local watermark has passed the
+//     calling worker's height, the tx is treated as pre-range and we
+//     return nil — the caller can fall through to a DDB lookup or treat
+//     as not-found.
 //
-// If called outside of a replay context (e.g. during live Kinesis consumption),
-// this is a no-op and returns nil immediately.
+// If called outside of a replay context, this is a no-op and returns nil.
 func WaitForTx(ctx context.Context, txHash string) error {
 	tracker, ok := ctx.Value(replayContextKey{}).(*heightTracker)
 	if !ok {
-		return nil // not in replay mode, no-op
+		return nil
 	}
 	currentHeight, _ := ctx.Value(replayHeightKey{}).(uint64)
-	return tracker.WaitForTx(ctx, txHash, currentHeight)
+	coord, _ := ctx.Value(replayCoordinatorKey{}).(Coordinator)
+	return tracker.WaitForTx(ctx, txHash, currentHeight, coord)
+}
+
+// PublishRelevantTx records that a transaction has been processed and is
+// "relevant" for cross-chunk dependency resolution. AdvanceFuncs should call
+// this for transactions whose effects another worker might call WaitForTx on
+// (e.g. SundaeSwap pool/order operations whose outputs become inputs to
+// later scoops).
+//
+// In single-machine mode this is a no-op (the local heightTracker already
+// records every tx automatically). In distributed mode it writes to the
+// shared coordinator tx table.
+//
+// If called outside of a replay context, this is a no-op and returns nil.
+func PublishRelevantTx(ctx context.Context, txHash string) error {
+	coord, ok := ctx.Value(replayCoordinatorKey{}).(Coordinator)
+	if !ok || coord == nil {
+		return nil
+	}
+	currentHeight, _ := ctx.Value(replayHeightKey{}).(uint64)
+	return coord.PublishTx(ctx, txHash, currentHeight)
 }
 
 // IsReplay returns true if the context is running inside a replay.
-// AdvanceFuncs can use this to distinguish live vs replay execution.
 func IsReplay(ctx context.Context) bool {
 	_, ok := ctx.Value(replayContextKey{}).(*heightTracker)
 	return ok
@@ -359,28 +467,22 @@ func IsReplay(ctx context.Context) bool {
 
 // --- Height tracker ---
 
-// heightTracker tracks completed heights and processed transactions.
-//
-// Heights use a watermark: the highest height such that all heights in
-// [startHeight, watermark] have been marked done.
-//
-// Transactions are tracked individually in a map (txHash → height).
-// Entries are garbage-collected when the watermark advances past their height,
-// keeping memory bounded to the in-flight processing window.
+// heightTracker tracks completed heights and processed transactions within
+// a single chunk (single process). For cross-chunk lookups, WaitForTx
+// consults the coordinator passed to it.
 type heightTracker struct {
 	mu          sync.Mutex
 	completed   map[uint64]bool
-	txToHeight  map[string]uint64   // txHash → height it was processed in
-	heightTxs   map[uint64][]string // height → txHashes (for GC on watermark advance)
-	watermark   uint64              // all heights <= watermark are done
+	txToHeight  map[string]uint64
+	heightTxs   map[uint64][]string
+	watermark   uint64
 	startHeight uint64
-	notify      chan struct{} // closed and recreated on any progress (broadcast)
+	notify      chan struct{}
 
-	// Wait stats (atomic, lock-free)
-	waitTxCalls    atomic.Uint64 // total WaitForTx calls
-	waitTxBlocked  atomic.Uint64 // calls that had to wait at least one cycle
-	waitTxBailouts atomic.Uint64 // calls that bailed out (tx from before replay range)
-	waitTxNanos    atomic.Int64  // cumulative nanoseconds spent blocked in WaitForTx
+	waitTxCalls    atomic.Uint64
+	waitTxBlocked  atomic.Uint64
+	waitTxBailouts atomic.Uint64
+	waitTxNanos    atomic.Int64
 }
 
 func newHeightTracker(startHeight uint64) *heightTracker {
@@ -398,15 +500,11 @@ func newHeightTracker(startHeight uint64) *heightTracker {
 	}
 }
 
-// broadcast wakes all goroutines waiting on the notify channel.
-// Caller must hold ht.mu.
 func (ht *heightTracker) broadcast() {
 	close(ht.notify)
 	ht.notify = make(chan struct{})
 }
 
-// MarkTxProcessed records that a transaction at the given height has been
-// fully processed by the AdvanceFunc. This unblocks any WaitForTx callers.
 func (ht *heightTracker) MarkTxProcessed(txHash string, height uint64) {
 	ht.mu.Lock()
 	ht.txToHeight[txHash] = height
@@ -415,8 +513,6 @@ func (ht *heightTracker) MarkTxProcessed(txHash string, height uint64) {
 	ht.mu.Unlock()
 }
 
-// MarkDone marks a height as fully processed and advances the watermark
-// if possible. GCs tx entries for heights that fall below the new watermark.
 func (ht *heightTracker) MarkDone(height uint64) {
 	ht.mu.Lock()
 	ht.completed[height] = true
@@ -425,7 +521,6 @@ func (ht *heightTracker) MarkDone(height uint64) {
 		delete(ht.completed, ht.watermark+1)
 		ht.watermark++
 	}
-	// GC tx entries for heights now below watermark
 	if ht.watermark > oldWatermark {
 		for h := oldWatermark + 1; h <= ht.watermark; h++ {
 			for _, txHash := range ht.heightTxs[h] {
@@ -438,19 +533,17 @@ func (ht *heightTracker) MarkDone(height uint64) {
 	ht.mu.Unlock()
 }
 
-// Watermark returns the current watermark (highest contiguously completed height).
 func (ht *heightTracker) Watermark() uint64 {
 	ht.mu.Lock()
 	defer ht.mu.Unlock()
 	return ht.watermark
 }
 
-// WaitStats returns a snapshot of wait statistics.
 type WaitStats struct {
-	TxCalls    uint64        // total WaitForTx calls
-	TxBlocked  uint64        // calls that actually had to wait
-	TxBailouts uint64        // calls that bailed out (tx from before replay range)
-	TxWaitTime time.Duration // cumulative time spent blocked
+	TxCalls    uint64
+	TxBlocked  uint64
+	TxBailouts uint64
+	TxWaitTime time.Duration
 }
 
 func (ht *heightTracker) WaitStats() WaitStats {
@@ -462,7 +555,6 @@ func (ht *heightTracker) WaitStats() WaitStats {
 	}
 }
 
-// WaitForHeight blocks until the watermark reaches at least the given height.
 func (ht *heightTracker) WaitForHeight(ctx context.Context, height uint64) error {
 	for {
 		ht.mu.Lock()
@@ -483,18 +575,12 @@ func (ht *heightTracker) WaitForHeight(ctx context.Context, height uint64) error
 	}
 }
 
-// WaitForTx blocks until the given transaction hash has been processed.
-// The tx is considered processed once MarkTxProcessed has been called for it.
-//
-// currentHeight is the block height currently being processed by the caller.
-// Once the watermark reaches currentHeight-1 (all earlier blocks are done)
-// and the tx still isn't found, WaitForTx returns nil — the tx is from
-// before the replay range and its effects are already in DynamoDB.
-//
-// If the tx was already processed and GC'd (its height fell below the
-// watermark), it will NOT be found in the map. This is safe because if
-// the tx was GC'd, its effects are already visible in DynamoDB.
-func (ht *heightTracker) WaitForTx(ctx context.Context, txHash string, currentHeight uint64) error {
+// WaitForTx waits for a transaction to appear in the local tracker. If the
+// local tracker can't find it after the chunk's watermark has caught up, and
+// a coordinator is provided, it falls through to coordinator.FindTx for
+// cross-chunk lookup. After both checks fail, returns nil (bailout — caller
+// treats as pre-range tx already in DynamoDB).
+func (ht *heightTracker) WaitForTx(ctx context.Context, txHash string, currentHeight uint64, coord Coordinator) error {
 	ht.waitTxCalls.Add(1)
 	start := time.Now()
 	blocked := false
@@ -513,10 +599,18 @@ func (ht *heightTracker) WaitForTx(ctx context.Context, txHash string, currentHe
 			return nil
 		}
 
-		// If all blocks before ours are done and the tx still isn't found,
-		// it's from before the replay range. Return nil so the caller can
-		// fall through to a DynamoDB query or treat as not-found.
+		// Local watermark caught up but tx still not in local tracker.
+		// Either it's pre-chunk (already in DDB) or in another worker's
+		// chunk (try coordinator.FindTx).
 		if currentHeight > 0 && wm >= currentHeight-1 {
+			if coord != nil {
+				if _, ok, err := coord.FindTx(ctx, txHash); err == nil && ok {
+					if blocked {
+						ht.waitTxNanos.Add(int64(time.Since(start)))
+					}
+					return nil
+				}
+			}
 			ht.waitTxBailouts.Add(1)
 			if blocked {
 				ht.waitTxNanos.Add(int64(time.Since(start)))
@@ -539,9 +633,8 @@ func (ht *heightTracker) WaitForTx(ctx context.Context, txHash string, currentHe
 	}
 }
 
-// --- Utility ---
-
-// LogProgress logs replay progress at a fixed interval.
+// LogProgress logs replay progress at a fixed interval (utility for callers
+// that want their own progress reporting on a custom counter).
 func LogProgress(ctx context.Context, logger zerolog.Logger, processed *atomic.Uint64, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
