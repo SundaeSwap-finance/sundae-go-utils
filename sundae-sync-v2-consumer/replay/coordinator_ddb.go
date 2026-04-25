@@ -183,9 +183,22 @@ func (c *DDBCoordinator) takeChunk(ctx context.Context, idx uint64, fresh bool) 
 	now := time.Now().Unix()
 	leaseUntil := now + int64(c.leaseTTL.Seconds())
 
-	cond := "attribute_exists(pk) AND #st = :pending AND attribute_not_exists(worker_id)"
-	if !fresh {
+	// Build only the values referenced by the chosen condition. DDB rejects
+	// requests with ExpressionAttributeValues entries that aren't used in any
+	// expression (UpdateExpression or ConditionExpression).
+	values := map[string]*dynamodb.AttributeValue{
+		":inprog": {S: aws.String(chunkStatusInProgress)},
+		":wid":    {S: aws.String(c.workerID)},
+		":lease":  {N: aws.String(strconv.FormatInt(leaseUntil, 10))},
+	}
+	var cond string
+	if fresh {
+		cond = "attribute_exists(pk) AND #st = :pending AND attribute_not_exists(worker_id)"
+		values[":pending"] = &dynamodb.AttributeValue{S: aws.String(chunkStatusPending)}
+	} else {
 		cond = "attribute_exists(pk) AND #st <> :done AND leased_until < :now"
+		values[":done"] = &dynamodb.AttributeValue{S: aws.String(chunkStatusDone)}
+		values[":now"] = &dynamodb.AttributeValue{N: aws.String(strconv.FormatInt(now, 10))}
 	}
 
 	out, err := c.api.UpdateItemWithContext(ctx, &dynamodb.UpdateItemInput{
@@ -193,20 +206,13 @@ func (c *DDBCoordinator) takeChunk(ctx context.Context, idx uint64, fresh bool) 
 		Key: map[string]*dynamodb.AttributeValue{
 			"pk": {S: aws.String(strconv.FormatUint(idx, 10))},
 		},
-		UpdateExpression: aws.String("SET #st = :inprog, worker_id = :wid, leased_until = :lease"),
+		UpdateExpression:    aws.String("SET #st = :inprog, worker_id = :wid, leased_until = :lease"),
 		ConditionExpression: aws.String(cond),
 		ExpressionAttributeNames: map[string]*string{
 			"#st": aws.String("status"),
 		},
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":pending": {S: aws.String(chunkStatusPending)},
-			":done":    {S: aws.String(chunkStatusDone)},
-			":inprog":  {S: aws.String(chunkStatusInProgress)},
-			":wid":     {S: aws.String(c.workerID)},
-			":lease":   {N: aws.String(strconv.FormatInt(leaseUntil, 10))},
-			":now":     {N: aws.String(strconv.FormatInt(now, 10))},
-		},
-		ReturnValues: aws.String(dynamodb.ReturnValueAllNew),
+		ExpressionAttributeValues: values,
+		ReturnValues:              aws.String(dynamodb.ReturnValueAllNew),
 	})
 	if err != nil {
 		var aerr awserr.Error
