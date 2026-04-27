@@ -10,8 +10,20 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/blinklabs-io/gouroboros/ledger"
+	"github.com/blinklabs-io/gouroboros/ledger/common"
 	"github.com/rs/zerolog"
 )
+
+// skipBodyHashCfg disables gouroboros's body-hash validation when parsing
+// blocks. Some Conway-era blocks with indefinite-length CBOR aux data fail
+// validation due to an upstream gouroboros bug — the cbor decoder strips the
+// 0xff break terminator from cbor.RawMessage extraction, so blake2b of the
+// returned bytes doesn't match what the producer node hashed. The blocks are
+// otherwise valid (Cardano consensus already accepted them and sundae-sync-v2
+// fetched them via the verified Ouroboros protocol), so this validation is
+// redundant in our pipeline and re-running it on bad-encoded blocks wedges
+// the indexer pointlessly.
+var skipBodyHashCfg = common.VerifyConfig{SkipBodyHashValidation: true}
 
 type Syncer struct {
 	Logger     zerolog.Logger
@@ -53,7 +65,7 @@ func (h *Syncer) SpawnSyncFunc(group *errgroup.Group, ctx context.Context, undoF
 				contents := <-undo.Contents
 				// Decode it from CBOR; byte 0 is a cbor array, byte 1 is the block era, and bytes 2 onward are the block itself
 				blockType := uint(contents[1])
-				block, err := ledger.NewBlockFromCbor(blockType, contents[2:])
+				block, err := ledger.NewBlockFromCbor(blockType, contents[2:], skipBodyHashCfg)
 				if err != nil {
 					h.Logger.Warn().Str("blockHash", hex.EncodeToString(undo.Hash)).Err(err).Msg("Error decoding block for undo")
 					event.Finished <- err
@@ -77,7 +89,7 @@ func (h *Syncer) SpawnSyncFunc(group *errgroup.Group, ctx context.Context, undoF
 			contents := <-event.Advance.Contents
 			// Parse it
 			blockType := uint(contents[1])
-			block, err := ledger.NewBlockFromCbor(blockType, contents[2:])
+			block, err := ledger.NewBlockFromCbor(blockType, contents[2:], skipBodyHashCfg)
 			if err != nil {
 				h.Logger.Warn().Str("blockHash", hex.EncodeToString(event.Advance.Hash)).Err(err).Msg("Error decoding block for advance")
 				event.Finished <- err
