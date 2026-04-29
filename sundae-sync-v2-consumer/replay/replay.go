@@ -577,10 +577,11 @@ func (ht *heightTracker) WaitForHeight(ctx context.Context, height uint64) error
 
 // crossChunkWaitTimeout bounds how long WaitForTx polls the coordinator's
 // tx table for a cross-chunk dependency to be published before bailing out
-// and treating the tx as pre-range. Adjacent chunks typically finish within
-// a few minutes; values much longer mostly waste time when the tx really is
-// pre-range (e.g. created before the replay's start height).
-const crossChunkWaitTimeout = 5 * time.Minute
+// and treating the tx as pre-range. Producing chunks can take 10-15 minutes
+// each in practice (block decode + DDB writes), so 30 minutes covers
+// dependencies on chunks that are claimed but still in-flight without
+// excessive wait when the tx really is pre-range.
+const crossChunkWaitTimeout = 30 * time.Minute
 
 // WaitForTx waits for a transaction to appear in the local tracker. If the
 // local tracker can't find it after the chunk's watermark has caught up, and
