@@ -575,11 +575,18 @@ func (ht *heightTracker) WaitForHeight(ctx context.Context, height uint64) error
 	}
 }
 
+// crossChunkWaitTimeout bounds how long WaitForTx polls the coordinator's
+// tx table for a cross-chunk dependency to be published before bailing out
+// and treating the tx as pre-range. Adjacent chunks typically finish within
+// a few minutes; values much longer mostly waste time when the tx really is
+// pre-range (e.g. created before the replay's start height).
+const crossChunkWaitTimeout = 5 * time.Minute
+
 // WaitForTx waits for a transaction to appear in the local tracker. If the
 // local tracker can't find it after the chunk's watermark has caught up, and
-// a coordinator is provided, it falls through to coordinator.FindTx for
-// cross-chunk lookup. After both checks fail, returns nil (bailout — caller
-// treats as pre-range tx already in DynamoDB).
+// a coordinator is provided, it polls coordinator.FindTx for cross-chunk
+// lookup with backoff up to crossChunkWaitTimeout. After both checks fail,
+// returns nil (bailout — caller treats as pre-range tx already in DynamoDB).
 func (ht *heightTracker) WaitForTx(ctx context.Context, txHash string, currentHeight uint64, coord Coordinator) error {
 	ht.waitTxCalls.Add(1)
 	start := time.Now()
@@ -600,15 +607,35 @@ func (ht *heightTracker) WaitForTx(ctx context.Context, txHash string, currentHe
 		}
 
 		// Local watermark caught up but tx still not in local tracker.
-		// Either it's pre-chunk (already in DDB) or in another worker's
-		// chunk (try coordinator.FindTx).
+		// Either it's pre-range (already in DDB before this replay started)
+		// or in another worker's chunk that hasn't finished yet.
+		//
+		// In distributed mode, poll coord.FindTx with backoff for up to
+		// crossChunkWaitTimeout — long enough for an adjacent chunk to
+		// finish and publish, short enough to fall through to the
+		// pre-range bailout when the tx truly never gets published.
 		if currentHeight > 0 && wm >= currentHeight-1 {
 			if coord != nil {
-				if _, ok, err := coord.FindTx(ctx, txHash); err == nil && ok {
-					if blocked {
+				if !blocked {
+					blocked = true
+					ht.waitTxBlocked.Add(1)
+				}
+				deadline := time.Now().Add(crossChunkWaitTimeout)
+				backoff := 1 * time.Second
+				for time.Now().Before(deadline) {
+					if _, ok, err := coord.FindTx(ctx, txHash); err == nil && ok {
 						ht.waitTxNanos.Add(int64(time.Since(start)))
+						return nil
 					}
-					return nil
+					select {
+					case <-time.After(backoff):
+					case <-ctx.Done():
+						ht.waitTxNanos.Add(int64(time.Since(start)))
+						return ctx.Err()
+					}
+					if backoff < 30*time.Second {
+						backoff *= 2
+					}
 				}
 			}
 			ht.waitTxBailouts.Add(1)
