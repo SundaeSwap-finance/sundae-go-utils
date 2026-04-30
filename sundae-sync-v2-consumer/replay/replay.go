@@ -575,19 +575,12 @@ func (ht *heightTracker) WaitForHeight(ctx context.Context, height uint64) error
 	}
 }
 
-// crossChunkWaitTimeout bounds how long WaitForTx polls the coordinator's
-// tx table for a cross-chunk dependency to be published before bailing out
-// and treating the tx as pre-range. Producing chunks can take 10-15 minutes
-// each in practice (block decode + DDB writes), so 30 minutes covers
-// dependencies on chunks that are claimed but still in-flight without
-// excessive wait when the tx really is pre-range.
-const crossChunkWaitTimeout = 30 * time.Minute
-
 // WaitForTx waits for a transaction to appear in the local tracker. If the
 // local tracker can't find it after the chunk's watermark has caught up, and
-// a coordinator is provided, it polls coordinator.FindTx for cross-chunk
-// lookup with backoff up to crossChunkWaitTimeout. After both checks fail,
-// returns nil (bailout — caller treats as pre-range tx already in DynamoDB).
+// a coordinator is provided, it does a single coordinator.FindTx check and
+// then bails out. Callers that need to handle truly missing cross-chunk deps
+// (e.g. migrate-orders' work-stealing) should retry their lookup themselves
+// rather than relying on this function to wait.
 func (ht *heightTracker) WaitForTx(ctx context.Context, txHash string, currentHeight uint64, coord Coordinator) error {
 	ht.waitTxCalls.Add(1)
 	start := time.Now()
@@ -608,35 +601,16 @@ func (ht *heightTracker) WaitForTx(ctx context.Context, txHash string, currentHe
 		}
 
 		// Local watermark caught up but tx still not in local tracker.
-		// Either it's pre-range (already in DDB before this replay started)
-		// or in another worker's chunk that hasn't finished yet.
-		//
-		// In distributed mode, poll coord.FindTx with backoff for up to
-		// crossChunkWaitTimeout — long enough for an adjacent chunk to
-		// finish and publish, short enough to fall through to the
-		// pre-range bailout when the tx truly never gets published.
+		// Either it's pre-range or in another worker's chunk. Do one
+		// coord.FindTx check and bail; callers handle the cross-chunk
+		// case themselves via DDB retry / work-stealing.
 		if currentHeight > 0 && wm >= currentHeight-1 {
 			if coord != nil {
-				if !blocked {
-					blocked = true
-					ht.waitTxBlocked.Add(1)
-				}
-				deadline := time.Now().Add(crossChunkWaitTimeout)
-				backoff := 1 * time.Second
-				for time.Now().Before(deadline) {
-					if _, ok, err := coord.FindTx(ctx, txHash); err == nil && ok {
+				if _, ok, err := coord.FindTx(ctx, txHash); err == nil && ok {
+					if blocked {
 						ht.waitTxNanos.Add(int64(time.Since(start)))
-						return nil
 					}
-					select {
-					case <-time.After(backoff):
-					case <-ctx.Done():
-						ht.waitTxNanos.Add(int64(time.Since(start)))
-						return ctx.Err()
-					}
-					if backoff < 30*time.Second {
-						backoff *= 2
-					}
+					return nil
 				}
 			}
 			ht.waitTxBailouts.Add(1)
