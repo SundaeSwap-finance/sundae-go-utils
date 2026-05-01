@@ -11,19 +11,32 @@ import (
 )
 
 type DAO struct {
-	logger zerolog.Logger
-	table  *ddb.Table
-	cache  sync.Map
-	dry    bool
+	logger   zerolog.Logger
+	table    *ddb.Table
+	cache    sync.Map
+	cacheOff bool
+	dry      bool
 }
 
 func New(api dynamodbiface.DynamoDBAPI, tableName string, logger zerolog.Logger, dry bool) *DAO {
 	return &DAO{table: ddb.New(api).MustTable(tableName, &Tx{}), logger: logger, dry: dry}
 }
 
+// NewUncached returns a DAO that does not cache fetched Tx records. Use this
+// for replay-style workloads that fetch many distinct txs across a long run —
+// the cache (unbounded sync.Map of full Tx records with embedded UTxO/datum
+// payloads) otherwise grows without limit and OOMs the process.
+func NewUncached(api dynamodbiface.DynamoDBAPI, tableName string, logger zerolog.Logger, dry bool) *DAO {
+	d := New(api, tableName, logger, dry)
+	d.cacheOff = true
+	return d
+}
+
 func (dao *DAO) Get(ctx context.Context, hash string) (Tx, error) {
-	if v, ok := dao.cache.Load(hash); ok {
-		return v.(Tx), nil
+	if !dao.cacheOff {
+		if v, ok := dao.cache.Load(hash); ok {
+			return v.(Tx), nil
+		}
 	}
 
 	var tx Tx
@@ -32,7 +45,9 @@ func (dao *DAO) Get(ctx context.Context, hash string) (Tx, error) {
 		return Tx{}, fmt.Errorf("failed to fetch transaction: %w", err)
 	}
 
-	dao.cache.Store(hash, tx)
+	if !dao.cacheOff {
+		dao.cache.Store(hash, tx)
+	}
 	return tx, err
 }
 
