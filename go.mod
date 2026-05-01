@@ -16,7 +16,7 @@ require (
 	github.com/SundaeSwap-finance/ogmigo/v6 v6.1.1-0.20251014193028-cab6e58fde5f
 	github.com/aws/aws-dax-go v1.2.14
 	github.com/aws/aws-sdk-go v1.55.8
-	github.com/blinklabs-io/gouroboros v0.165.3
+	github.com/blinklabs-io/gouroboros v0.166.0
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/harlow/kinesis-consumer v0.3.5
 	github.com/savaki/bech32 v0.0.0-20220223220548-20f899656a90
@@ -32,7 +32,7 @@ require (
 	github.com/antlr/antlr4 v0.0.0-20181218183524-be58ebffde8e // indirect
 	github.com/awslabs/kinesis-aggregation/go v0.0.0-20220610150308-f265332d248d // indirect
 	github.com/bits-and-blooms/bitset v1.24.4 // indirect
-	github.com/blinklabs-io/plutigo v0.1.8 // indirect
+	github.com/blinklabs-io/plutigo v0.1.9 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.6 // indirect
 	github.com/btcsuite/btcd/btcutil v1.1.6 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0 // indirect
