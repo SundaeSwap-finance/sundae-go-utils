@@ -33,10 +33,19 @@ type Syncer struct {
 	ctx        context.Context // errgroup context; cancelled when sync goroutine exits with error
 }
 
+// downloadResult carries either the block bytes or the error from the async
+// downloader. Using a struct (rather than a bare []byte channel) lets the
+// sync goroutine surface download failures as per-event errors instead of
+// blocking forever on a channel that will never receive.
+type downloadResult struct {
+	bytes []byte
+	err   error
+}
+
 type Block struct {
-	Index    json.Number `json:"index"`
-	Hash     []byte      `json:"hash"`
-	Contents chan []byte `json:"-"`
+	Index    json.Number         `json:"index"`
+	Hash     []byte              `json:"hash"`
+	Contents chan downloadResult `json:"-"`
 }
 type Message struct {
 	Undo     []Block    `json:"undo"`
@@ -49,64 +58,71 @@ type AdvanceFunc func(ctx context.Context, tx ledger.Transaction, slot uint64, t
 
 func (h *Syncer) SpawnSyncFunc(group *errgroup.Group, ctx context.Context, undoFunc UndoFunc, advanceFunc AdvanceFunc) {
 	h.ctx = ctx
-	group.Go(func() (err error) {
-		// For every event we receive
+	group.Go(func() error {
+		// Drain events forever. Per-event errors are reported via event.Finished
+		// and the loop continues — a single bad block (or downloader failure)
+		// must not poison the long-lived goroutine, otherwise every subsequent
+		// invocation on the same warm Lambda container fails instantly with
+		// "sync goroutine no longer running".
 		for event := range h.Events {
-			defer func() {
-				if panicCause := recover(); panicCause != nil {
-					h.Logger.Error().Any("panicCause", panicCause).Msg("panic while processing blocks, aborting")
-					err = fmt.Errorf("panic while processing blocks, aborting: %v", panicCause)
-					event.Finished <- err
-				}
-			}()
-			// First apply each undo
-			for _, undo := range event.Undo {
-				// Wait for the contents of the block
-				contents := <-undo.Contents
-				// Decode it from CBOR; byte 0 is a cbor array, byte 1 is the block era, and bytes 2 onward are the block itself
-				blockType := uint(contents[1])
-				block, err := ledger.NewBlockFromCbor(blockType, contents[2:], skipBodyHashCfg)
-				if err != nil {
-					h.Logger.Warn().Str("blockHash", hex.EncodeToString(undo.Hash)).Err(err).Msg("Error decoding block for undo")
-					event.Finished <- err
-					return err
-				}
-
-				// Iterate over the transactions *in reverse* (to undo them in the reverse of the order they were advanced)
-				txs := block.Transactions()
-				slices.Reverse(txs)
-				for _, tx := range txs {
-					// And invoke the undo logic
-					if err := undoFunc(ctx, tx, block.SlotNumber()); err != nil {
-						h.Logger.Warn().Str("blockHash", hex.EncodeToString(undo.Hash)).Err(err).Msg("Error executing undo logic for transaction")
-						event.Finished <- err
-						return err
-					}
-				}
-			}
-
-			// Now, wait for the contents of the block we're applying
-			contents := <-event.Advance.Contents
-			// Parse it
-			blockType := uint(contents[1])
-			block, err := ledger.NewBlockFromCbor(blockType, contents[2:], skipBodyHashCfg)
-			if err != nil {
-				h.Logger.Warn().Str("blockHash", hex.EncodeToString(event.Advance.Hash)).Err(err).Msg("Error decoding block for advance")
-				event.Finished <- err
-				return err
-			}
-			// And apply each transaction in order
-			for index, tx := range block.Transactions() {
-				if err := advanceFunc(ctx, tx, block.SlotNumber(), index); err != nil {
-					h.Logger.Warn().Str("blockHash", hex.EncodeToString(event.Advance.Hash)).Err(err).Msg("Error executing advance logic for transaction")
-					event.Finished <- err
-					return err
-				}
-			}
-			event.Finished <- nil
+			err := h.processEvent(ctx, event, undoFunc, advanceFunc)
+			event.Finished <- err
 		}
 		return nil
 	})
+}
+
+// processEvent handles one Message: drains downloader results, decodes blocks,
+// and dispatches transactions through undo/advance. All errors are returned;
+// the caller decides whether to keep the goroutine alive.
+func (h *Syncer) processEvent(ctx context.Context, event Message, undoFunc UndoFunc, advanceFunc AdvanceFunc) (err error) {
+	defer func() {
+		if panicCause := recover(); panicCause != nil {
+			h.Logger.Error().Any("panicCause", panicCause).Msg("panic while processing blocks")
+			err = fmt.Errorf("panic while processing blocks: %v", panicCause)
+		}
+	}()
+
+	for _, undo := range event.Undo {
+		res := <-undo.Contents
+		if res.err != nil {
+			h.Logger.Warn().Str("blockHash", hex.EncodeToString(undo.Hash)).Err(res.err).Msg("Failed downloading undo block")
+			return fmt.Errorf("download undo block %s: %w", hex.EncodeToString(undo.Hash), res.err)
+		}
+		blockType := uint(res.bytes[1])
+		block, err := ledger.NewBlockFromCbor(blockType, res.bytes[2:], skipBodyHashCfg)
+		if err != nil {
+			h.Logger.Warn().Str("blockHash", hex.EncodeToString(undo.Hash)).Err(err).Msg("Error decoding block for undo")
+			return err
+		}
+		txs := block.Transactions()
+		slices.Reverse(txs)
+		for _, tx := range txs {
+			if err := undoFunc(ctx, tx, block.SlotNumber()); err != nil {
+				h.Logger.Warn().Str("blockHash", hex.EncodeToString(undo.Hash)).Err(err).Msg("Error executing undo logic for transaction")
+				return err
+			}
+		}
+	}
+
+	res := <-event.Advance.Contents
+	if res.err != nil {
+		h.Logger.Warn().Str("blockHash", hex.EncodeToString(event.Advance.Hash)).Err(res.err).Msg("Failed downloading advance block")
+		return fmt.Errorf("download advance block %s: %w", hex.EncodeToString(event.Advance.Hash), res.err)
+	}
+	blockType := uint(res.bytes[1])
+	block, err := ledger.NewBlockFromCbor(blockType, res.bytes[2:], skipBodyHashCfg)
+	if err != nil {
+		h.Logger.Warn().Str("blockHash", hex.EncodeToString(event.Advance.Hash)).Err(err).Msg("Error decoding block for advance")
+		return err
+	}
+	for index, tx := range block.Transactions() {
+		if err := advanceFunc(ctx, tx, block.SlotNumber(), index); err != nil {
+			h.Logger.Warn().Str("blockHash", hex.EncodeToString(event.Advance.Hash)).Err(err).Msg("Error executing advance logic for transaction")
+			return err
+		}
+	}
+	return nil
 }
 
 func (h *Syncer) HandleOne(data []byte) chan error {
@@ -117,23 +133,27 @@ func (h *Syncer) HandleOne(data []byte) chan error {
 		return finished
 	}
 	for idx := range message.Undo {
-		message.Undo[idx].Contents = make(chan []byte, 1)
+		message.Undo[idx].Contents = make(chan downloadResult, 1)
 	}
-	message.Advance.Contents = make(chan []byte, 1)
+	message.Advance.Contents = make(chan downloadResult, 1)
 	message.Finished = finished
 
+	// Plain goroutines (not h.Group.Go) so a downloader failure does NOT cancel
+	// the errgroup context — that would kill the long-lived sync goroutine and
+	// poison every subsequent Lambda invocation on this warm container. The
+	// download error is delivered to processEvent via the Contents channel and
+	// surfaced as a per-event error instead.
 	for _, undo := range message.Undo {
-		h.Group.Go(func() error { return h.Downloader.DownloadBlock(undo.Hash, undo.Contents) })
+		go func(b Block) {
+			bytes, err := h.Downloader.DownloadBlockSync(b.Hash)
+			b.Contents <- downloadResult{bytes: bytes, err: err}
+		}(undo)
 	}
-	h.Group.Go(func() error { return h.Downloader.DownloadBlock(message.Advance.Hash, message.Advance.Contents) })
+	go func(b Block) {
+		bytes, err := h.Downloader.DownloadBlockSync(b.Hash)
+		b.Contents <- downloadResult{bytes: bytes, err: err}
+	}(message.Advance)
 
-	// Use select to avoid deadlock if the sync goroutine has exited (e.g. from
-	// a previous error). When the errgroup context is cancelled, the sync
-	// goroutine is no longer reading from h.Events.
-	select {
-	case h.Events <- message:
-	case <-h.ctx.Done():
-		finished <- fmt.Errorf("sync goroutine no longer running: %w", h.ctx.Err())
-	}
+	h.Events <- message
 	return finished
 }
