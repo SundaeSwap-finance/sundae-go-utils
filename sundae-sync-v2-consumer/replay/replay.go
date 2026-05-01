@@ -35,8 +35,16 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/blinklabs-io/gouroboros/ledger"
+	"github.com/blinklabs-io/gouroboros/ledger/common"
 	"github.com/rs/zerolog"
 )
+
+// skipBodyHashCfg disables gouroboros body-hash validation when parsing
+// archived blocks. Many Conway-era blocks fail body_hash verification because
+// gouroboros's tx re-encoding doesn't byte-equal the original CBOR; the block
+// content itself is intact (header hash matches, all txs decode). The same
+// flag is applied in the live consumer (sync.go) for the same reason.
+var skipBodyHashCfg = common.VerifyConfig{SkipBodyHashValidation: true}
 
 // AdvanceFunc is called for each transaction during replay.
 // It has the same signature as the live syncV2Consumer advance function.
@@ -363,7 +371,7 @@ func (r *Replayer) processHeight(ctx context.Context, rec heightRecord) error {
 	}
 
 	blockType := uint(contents[1])
-	block, err := ledger.NewBlockFromCbor(blockType, contents[2:])
+	block, err := ledger.NewBlockFromCbor(blockType, contents[2:], skipBodyHashCfg)
 	if err != nil {
 		return fmt.Errorf("decode block %s (era %d): %w", rec.Hash, blockType, err)
 	}
