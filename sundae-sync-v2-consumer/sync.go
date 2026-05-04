@@ -42,8 +42,18 @@ type downloadResult struct {
 	err   error
 }
 
+// Block is the wire shape of a single block reference in a sync-v2 broadcast
+// message. The producer (Rust, sundae-sync-v2) marshals this from
+// utxorpc::spec::sync::BlockRef. As of utxorpc 0.13 the JSON field name for
+// the block's slot is "slot" (it was "index" in 0.11; the producer was bumped
+// 2026-02-19 in commit e32ffad of sundae-sync-v2). The actual block consumer
+// only uses Hash to fetch the block from S3 and reads slot/height from the
+// decoded CBOR, so the rename slipped past everything except the heartbeat
+// Lambda. Keep the field names matching the wire format so future readers
+// don't have to bisect Rust commits to figure out what's going on.
 type Block struct {
-	Index    json.Number         `json:"index"`
+	Slot     json.Number         `json:"slot"`
+	Height   json.Number         `json:"height"`
 	Hash     []byte              `json:"hash"`
 	Contents chan downloadResult `json:"-"`
 }
