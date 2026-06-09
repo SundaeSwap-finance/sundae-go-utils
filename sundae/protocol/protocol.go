@@ -23,6 +23,7 @@ var (
 	V1          ProtocolVersion = "V1"
 	V3          ProtocolVersion = "V3"
 	Stableswaps ProtocolVersion = "Stableswaps"
+	V4          ProtocolVersion = "V4"
 )
 
 // TODO: ogmigo type?
