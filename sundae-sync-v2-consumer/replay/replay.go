@@ -53,12 +53,45 @@ var skipBodyHashCfg = common.VerifyConfig{SkipBodyHashValidation: true}
 // PublishRelevantTx after work is done so other workers can find it.
 type AdvanceFunc func(ctx context.Context, tx ledger.Transaction, slot uint64, txIndex int) error
 
-// Config configures the block replay.
+// Config configures the block replay. Exactly one of BlockDir or BlockSource
+// must be set; if both are present BlockSource wins.
 type Config struct {
-	BlockDir    string // path to mounted S3 bucket (contains blocks/by-hash/...)
-	LookupTable string // DynamoDB lookup table name (e.g. "{env}-sundae-sync-v2--lookup")
-	StartHeight uint64 // first height to process (used as the initial open-ended chunk start in single-machine mode)
-	Workers     int    // number of parallel workers (default 64)
+	BlockDir    string      // path to a mounted bucket (contains blocks/by-hash/...). Filesystem source.
+	BlockSource BlockSource // pluggable block source — use for direct-S3 reads, an in-memory test source, etc.
+	LookupTable string      // DynamoDB lookup table name (e.g. "{env}-sundae-sync-v2--lookup")
+	StartHeight uint64      // first height to process (used as the initial open-ended chunk start in single-machine mode)
+	Workers     int         // number of parallel workers (default 64)
+}
+
+// BlockSource fetches the raw CBOR bytes for a block identified by its
+// lookup-table record. Implementations include a default filesystem reader
+// (used when only Config.BlockDir is set) and an S3 streaming reader
+// (S3BlockSource).
+type BlockSource interface {
+	FetchBlock(ctx context.Context, location, hashHex string) ([]byte, error)
+}
+
+// filesystemSource reads blocks from a mounted bucket on local disk.
+type filesystemSource struct {
+	dir string
+}
+
+func (s *filesystemSource) FetchBlock(_ context.Context, location, _ string) ([]byte, error) {
+	path := filepath.Join(s.dir, location)
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	return contents, nil
+}
+
+// blockSource resolves the configured BlockSource, falling back to the
+// implicit filesystem source when only BlockDir is set.
+func (r *Replayer) blockSource() BlockSource {
+	if r.config.BlockSource != nil {
+		return r.config.BlockSource
+	}
+	return &filesystemSource{dir: r.config.BlockDir}
 }
 
 // heightRecord is a row from the lookup table.
@@ -355,19 +388,20 @@ func (r *Replayer) produceHeights(ctx context.Context, work chan<- heightRecord,
 	}
 }
 
-// processHeight loads a block from the filesystem, deserializes it,
-// and calls the advance function for each transaction.
+// processHeight loads a block via the configured BlockSource (or the implicit
+// filesystem source when only BlockDir is set), deserializes it, and calls the
+// advance function for each transaction.
 func (r *Replayer) processHeight(ctx context.Context, rec heightRecord) error {
-	blockPath := filepath.Join(r.config.BlockDir, rec.Location)
-	r.logger.Debug().Uint64("height", rec.Height).Str("path", blockPath).Msg("Loading block")
+	source := r.blockSource()
+	r.logger.Debug().Uint64("height", rec.Height).Str("location", rec.Location).Msg("Loading block")
 
-	contents, err := os.ReadFile(blockPath)
+	contents, err := source.FetchBlock(ctx, rec.Location, rec.Hash)
 	if err != nil {
-		return fmt.Errorf("read block %s: %w", blockPath, err)
+		return fmt.Errorf("fetch block %s: %w", rec.Hash, err)
 	}
 
 	if len(contents) < 2 {
-		return fmt.Errorf("block file too short: %s", blockPath)
+		return fmt.Errorf("block %s too short (%d bytes)", rec.Hash, len(contents))
 	}
 
 	blockType := uint(contents[1])

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -21,6 +22,19 @@ type S3Downloader struct {
 	Env     string
 	Account string
 	S3      s3iface.S3API
+	// Bucket overrides the default `{Env}-sundae-sync-v2-{Account}-us-east-2`
+	// bucket. Accepts a bare bucket name or an `s3://name` URI. Empty falls
+	// back to the conventional interpolation.
+	Bucket string
+}
+
+// bucketName returns the bucket to download from, honouring an explicit
+// override and stripping any `s3://` prefix.
+func (h *S3Downloader) bucketName() string {
+	if h.Bucket != "" {
+		return strings.TrimPrefix(h.Bucket, "s3://")
+	}
+	return fmt.Sprintf("%v-sundae-sync-v2-%v-us-east-2", h.Env, h.Account)
 }
 
 // Download a block from the S3 bucket and return the bytes
@@ -28,7 +42,7 @@ func (h *S3Downloader) DownloadBlockSync(hash []byte) ([]byte, error) {
 	prefix := fmt.Sprintf("%02x", hash[0])
 	filename := fmt.Sprintf("blocks/by-hash/%v/%v.cbor", prefix, hex.EncodeToString(hash))
 	resp, err := h.S3.GetObject(&s3.GetObjectInput{
-		Bucket: aws.String(fmt.Sprintf("%v-sundae-sync-v2-%v-us-east-2", h.Env, h.Account)),
+		Bucket: aws.String(h.bucketName()),
 		Key:    aws.String(filename),
 	})
 	if err != nil {

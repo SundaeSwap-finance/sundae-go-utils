@@ -25,6 +25,7 @@ import (
 
 	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
 	"github.com/SundaeSwap-finance/sundae-go-utils/sundae-sync-v2-consumer/dao/txdao"
+	"github.com/SundaeSwap-finance/sundae-go-utils/sundae-sync-v2-consumer/replay"
 	"github.com/urfave/cli/v2"
 )
 
@@ -33,6 +34,8 @@ var SyncV2ConsumerOpts struct {
 	Stream      string
 	Account     string
 	Timestamp   cli.Timestamp
+	Bucket      string
+	StartHeight uint64
 }
 
 var TransactionFlag = sundaecli.StringFlag("transaction", "Replay just one transaction", &SyncV2ConsumerOpts.Transaction)
@@ -40,11 +43,27 @@ var StreamFlag = sundaecli.StringFlag("kinesis-stream", "The stream name or arn 
 var AccountFlag = sundaecli.StringFlag("aws-account", "The AWS Account number, for interpolating S3 buckets", &SyncV2ConsumerOpts.Account)
 var TsFlag = sundaecli.TimestampFlag("kinesis-timestamp", "2006-01-02 15:04:05", "The timestamp to start syncing from", &SyncV2ConsumerOpts.Timestamp)
 
+// BucketFlag overrides the default `{env}-sundae-sync-v2-{account}-us-east-2`
+// bucket. Accepts a bare bucket name or `s3://name[/prefix]`. When combined
+// with --start-height the consumer runs in an offline replay mode that pulls
+// archived blocks directly from this bucket via the S3Downloader.
+var BucketFlag = sundaecli.StringFlag("bucket", "S3 bucket override (e.g. `preview-sundae-sync-v2-…-us-east-2` or `s3://…`). Combine with --start-height to drive an offline replay.", &SyncV2ConsumerOpts.Bucket)
+
+// StartHeightFlag, when non-zero, switches the consumer into offline replay
+// mode: iterate height records in the sync-v2 lookup table starting at this
+// height, download each block from the configured (or default) S3 bucket, and
+// dispatch through the same Advance callback the live Kinesis path uses. Pair
+// with --dry to log-and-skip writes inside the Advance handler. Replays run
+// until the lookup table runs out of consecutive heights.
+var StartHeightFlag = sundaecli.Uint64Flag("start-height", "Offline replay: first block height to process. Iterates blocks from --bucket (or the default sync-v2 bucket) and dispatches through the same Advance callback as the live consumer.", &SyncV2ConsumerOpts.StartHeight)
+
 var CommonFlags = []cli.Flag{
 	TransactionFlag,
 	StreamFlag,
 	AccountFlag,
 	TsFlag,
+	BucketFlag,
+	StartHeightFlag,
 }
 
 type SyncV2Consumer struct {
@@ -89,8 +108,11 @@ func (h *SyncV2Consumer) Start(c *cli.Context) error {
 	} else if SyncV2ConsumerOpts.Transaction != "" {
 		h.Logger.Info().Msg("Replaying specific transaction")
 		return h.RunOne(c)
+	} else if SyncV2ConsumerOpts.StartHeight > 0 {
+		h.Logger.Info().Uint64("startHeight", SyncV2ConsumerOpts.StartHeight).Msg("Replaying from S3 archive")
+		return h.StartReplay(c)
 	} else {
-		return fmt.Errorf("Must run as a lambda, or specify --steam or --utxorpc-url")
+		return fmt.Errorf("Must run as a lambda, or specify --kinesis-stream / --transaction / --start-height")
 	}
 }
 
@@ -174,6 +196,41 @@ func (h *SyncV2Consumer) StartKinesis(c *cli.Context) error {
 	}
 
 	return nil
+}
+
+// StartReplay drives the existing replay framework with the consumer's
+// Advance callback. The block source is the S3 bucket given by --bucket
+// (defaulting to the conventional `{env}-sundae-sync-v2-{account}-us-east-2`
+// bucket); replay itself handles the height iteration, parallel workers, and
+// per-tx dispatch.
+//
+// Combine with --dry in the host binary: the consumer framework itself does
+// not enforce read-only behaviour, but Advance callbacks are expected to
+// inspect sundaecli.CommonOpts.Dry and skip side effects when set.
+func (h *SyncV2Consumer) StartReplay(c *cli.Context) error {
+	bucket := SyncV2ConsumerOpts.Bucket
+	if bucket == "" {
+		bucket = fmt.Sprintf("%v-sundae-sync-v2-%v-us-east-2",
+			sundaecli.CommonOpts.Env, SyncV2ConsumerOpts.Account)
+	}
+
+	// SharedConfigEnable so AWS_PROFILE works for `--start-height` runs invoked
+	// from a developer's shell. The Kinesis/Lambda paths use the host runtime's
+	// role and never hit this code. h.S3 was built without SharedConfig in
+	// New(), so it also gets a fresh client here.
+	awsSess := session.Must(session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+	}))
+	api := dynamodb.New(awsSess)
+	s3client := s3.New(awsSess)
+
+	cfg := replay.Config{
+		BlockSource: &replay.S3BlockSource{S3: s3client, Bucket: bucket},
+		LookupTable: txdao.TableName(sundaecli.CommonOpts.Env),
+		StartHeight: SyncV2ConsumerOpts.StartHeight,
+	}
+	r := replay.New(api, cfg, replay.AdvanceFunc(h.Advance), h.Logger)
+	return r.Run(c.Context)
 }
 
 func (h *SyncV2Consumer) RunOne(c *cli.Context) error {
