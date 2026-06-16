@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
 	"github.com/savaki/bech32"
 )
 
@@ -71,6 +72,24 @@ func HasNoStakeAddress(address string) (bool, error) {
 		return false, fmt.Errorf("unable to decode address %v: %w", address, err)
 	}
 	return hasNoStakeAddress(bytes), nil
+}
+
+// EnvToNetworkID returns the CIP-19 network ID for the named env (0 for
+// preview / preprod / any other testnet, 1 for mainnet). Mirrors
+// EnvToSlotOffset's env handling so address-builders can stay env-driven
+// like time helpers.
+func EnvToNetworkID(env string) (byte, error) {
+	if env == "" {
+		env = sundaecli.CommonOpts.Env
+	}
+	switch env {
+	case "preview", "preprod":
+		return 0, nil
+	case "mainnet", "cardano-tom":
+		return 1, nil
+	default:
+		return 0, fmt.Errorf("unrecognized environment %v", env)
+	}
 }
 
 func SplitAddress(address string) (paymentCredential, stakingCredential []byte, err error) {
