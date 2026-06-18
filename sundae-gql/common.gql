@@ -54,3 +54,72 @@ enum Version {
     Stableswaps
     V4
 }
+
+"""
+A composable behavior module attached to a sundae-v4 (or any future
+module-composable protocol) pool. Together, a pool's modules describe
+every aspect of its behavior — the math (`invariant`), authorization
+(`auth`), fee policy (`fees`), and future extensions.
+
+Pre-v4 pools surface as an empty list — their behavior is fixed by the
+protocol version itself.
+"""
+type PoolModule {
+    """
+    Classification of what aspect of the pool this module governs:
+    `invariant`, `auth`, `fees`, … Unknown modules surface as
+    `unknown` so callers can still see the hash + config.
+    """
+    kind: String!
+    """
+    The on-chain identifier of the module within its kind — e.g.
+    `constant_sum`, `constant_product`, `concentrated_liquidity` for
+    `invariant`; `kyc`, `whitelist` for `auth`. `unknown` until the
+    indexer learns the mapping for this hash.
+    """
+    identifier: String!
+    """
+    Hash of the module's withdraw-script — the on-chain identity that
+    won't shift even if the human label does.
+    """
+    hash: HexBytes!
+    """
+    Hash of the module's settings-entry config, if any. Null for
+    modules whose behavior is fully determined by the module hash.
+    """
+    configHash: HexBytes
+}
+
+"""
+A constraint attached to a sundae-v4 order. Like PoolModule, the list
+captures the full behavior surface: the placement intent (`intent` —
+basic / swap / strategy) plus any execution modifiers (`modifier` —
+route / fair-batch) the scooper layers on top.
+
+Pre-v4 orders surface as an empty list — their behavior is fixed by
+the typed `details` union.
+"""
+type OrderConstraint {
+    """
+    Classification — `intent` for the constraint that drives what the
+    order is asking for, `modifier` for execution-time composition
+    additions, `unknown` for hashes we haven't classified yet.
+    """
+    kind: String!
+    """
+    The on-chain identifier of the constraint — e.g. `basic`, `swap`,
+    `strategy`, `route`, `fair-batch`. `unknown` if we haven't learnt
+    the mapping for this hash.
+    """
+    identifier: String!
+    """
+    Hash of the constraint module's withdraw-script.
+    """
+    hash: HexBytes!
+    """
+    Hex-encoded opaque payload the constraint carries. The shape is
+    constraint-specific; callers that need to decode it should look at
+    the matching constraint package (e.g. orderdatumv4.ParseSwapFields).
+    """
+    data: HexBytes
+}
