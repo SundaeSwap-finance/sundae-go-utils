@@ -1,30 +1,36 @@
+version: "2"
 run:
-  timeout: 5m
   modules-download-mode: readonly
-
 linters:
-  enable:
-    - errcheck
-    - ineffassign
-    - staticcheck
-    - unused
-    - gosimple
-    - govet
-
-linters-settings:
-  staticcheck:
-    checks:
-      - all
-      - -SA1019 # Disable deprecation warnings (we know about AWS SDK v1, will migrate later)
-
-issues:
-  exclude-rules:
-    # Exclude AWS SDK v1 deprecation warnings - we're not ready to migrate yet
-    - linters:
-        - staticcheck
-      text: "aws-sdk-go is deprecated"
-
-    # Exclude test files from some checks
-    - path: _test\.go
-      linters:
-        - errcheck
+  settings:
+    staticcheck:
+      checks:
+        - all
+        - -SA1019 # Disable deprecation warnings (we know about AWS SDK v1, will migrate later)
+        - -ST1* # Stylecheck (ST*) was not enabled under golangci-lint v1; keep it off after the v2 merge of staticcheck/gosimple/stylecheck
+        - -QF1* # Quickfix (QF*) suggestions were likewise not enforced before
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - staticcheck
+        text: aws-sdk-go is deprecated
+      - linters:
+          - errcheck
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

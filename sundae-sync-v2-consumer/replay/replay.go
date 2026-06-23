@@ -338,7 +338,9 @@ func (r *Replayer) produceHeights(ctx context.Context, work chan<- heightRecord,
 			for _, item := range out.Responses[r.config.LookupTable] {
 				rec := heightRecord{}
 				if v := item["pk"]; v != nil && v.S != nil {
-					fmt.Sscanf(*v.S, "height:%d", &rec.Height)
+					// BatchGetItem only returns items whose pk we asked for, and we
+					// only ask for "height:%d" keys, so the parse cannot fail here.
+					_, _ = fmt.Sscanf(*v.S, "height:%d", &rec.Height)
 				}
 				if v := item["hash"]; v != nil && v.S != nil {
 					rec.Hash = *v.S
