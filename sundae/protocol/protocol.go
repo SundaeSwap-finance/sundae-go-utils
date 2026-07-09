@@ -47,12 +47,33 @@ type ScriptReference struct {
 	TxIn TxIn   `dynamodbav:"txIn"`
 }
 
+// Setting is one indexed settings UTxO for a protocol. V1/V3/Stableswaps have a
+// single entry (the root settings); v4 has several — the root settings plus the
+// per-order-type OrderConfig entries (and the pool config) — distinguished by
+// Label. This uniform shape means clients don't need a bespoke type per kind:
+// the raw Datum is always available, and Values holds the decoded fields
+// (e.g. an order config's `requiredConstraints` and its config `token`).
+type Setting struct {
+	// Label describes this entry's purpose, e.g. "settings" (root),
+	// "swap-order" / "basic-order" / "strategy-order" (order configs), "pool".
+	Label string `dynamodbav:"label"`
+	// TxIn is the on-chain UTxO holding this entry (usable as a reference input).
+	TxIn TxIn `dynamodbav:"txIn"`
+	// Datum is the raw inline datum CBOR of the entry.
+	Datum sundaegql.HexBytes `dynamodbav:"datum"`
+	// Values is the decoded datum (fields vary by label / protocol version).
+	Values *sundaegql.JSON `dynamodbav:"values"`
+}
+
 type Protocol struct {
 	Version      ProtocolVersion   `dynamodbav:"version"`
 	Environment  string            `dynamodbav:"environment"`
 	Blueprint    Blueprint         `dynamodbav:"blueprint"`
 	BlueprintUrl string            `dynamodbav:"-"`
 	References   []ScriptReference `dynamodbav:"references"`
+	// Settings is the indexed settings entries for this protocol version (nil if
+	// not indexed). One entry for v1/v3/stableswaps; several for v4.
+	Settings []Setting `dynamodbav:"settings"`
 }
 
 type Protocols []Protocol
