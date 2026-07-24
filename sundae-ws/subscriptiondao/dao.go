@@ -123,6 +123,27 @@ func (d *DAO) DeleteByConnection(ctx context.Context, connectionID string) error
 	return nil
 }
 
+// DeleteByConnectionAndClientSubID removes every subscription row that a single
+// client subscription fanned out to. A multi-topic subscription stores one row
+// per topic, all sharing the same ClientSubID; graphql-ws `complete` carries
+// only that client id, so we look up the connection's rows and delete the
+// matching ones.
+func (d *DAO) DeleteByConnectionAndClientSubID(ctx context.Context, connectionID, clientSubID string) error {
+	subs, err := d.QueryByConnection(ctx, connectionID)
+	if err != nil {
+		return err
+	}
+	for _, sub := range subs {
+		if sub.ClientSubID != clientSubID {
+			continue
+		}
+		if err := d.Delete(ctx, sub.SubscriptionID); err != nil {
+			return fmt.Errorf("failed to delete subscription %v: %w", sub.SubscriptionID, err)
+		}
+	}
+	return nil
+}
+
 // Count returns the number of subscriptions for a given topic.
 func (d *DAO) Count(ctx context.Context, topic string) (int64, error) {
 	input := &dynamodb.QueryInput{

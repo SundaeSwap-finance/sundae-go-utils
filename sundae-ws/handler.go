@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,9 +20,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// TopicResolver resolves a subscription field name and arguments to a topic string.
+// TopicResolver resolves a subscription field name and arguments to the pub/sub
+// topic(s) it subscribes to. Most fields map to a single topic; some fan out to
+// several (e.g. an address-keyed order subscription covers both the payment- and
+// stake-derived owner-hash topics), so ComputeTopics returns a slice.
 type TopicResolver interface {
-	ComputeTopic(fieldName string, args map[string]interface{}) (string, error)
+	ComputeTopics(fieldName string, args map[string]interface{}) ([]string, error)
 	ValidateField(fieldName string) error
 }
 
@@ -198,10 +202,16 @@ func (h *Handler) handleSubscribe(ctx context.Context, logger zerolog.Logger, co
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 	}
 
-	// Compute the topic
-	topic, err := h.Topics.ComputeTopic(fieldName, args)
+	// Compute the topic(s). A single subscription may fan out to several topics
+	// (e.g. an address-keyed order subscription covers both the payment- and
+	// stake-derived owner-hash topics). We store one row per topic, all tagged
+	// with the same ClientSubID so completion removes them together.
+	topics, err := h.Topics.ComputeTopics(fieldName, args)
+	if err == nil && len(topics) == 0 {
+		err = fmt.Errorf("no topics for subscription field %q", fieldName)
+	}
 	if err != nil {
-		logger.Warn().Err(err).Str("field", fieldName).Msg("failed to compute topic")
+		logger.Warn().Err(err).Str("field", fieldName).Msg("failed to compute topics")
 		if sendErr := h.postToConnection(ctx, endpoint, connID, ErrorMessage(msg.ID, err.Error())); sendErr != nil {
 			logger.Error().Err(sendErr).Msg("failed to send error")
 		}
@@ -213,43 +223,47 @@ func (h *Handler) handleSubscribe(ctx context.Context, logger zerolog.Logger, co
 		ttl = 2 * time.Hour
 	}
 
-	sub := subscriptiondao.Subscription{
-		SubscriptionID: connID + "#" + msg.ID,
-		ConnectionID:   connID,
-		Topic:          topic,
-		Endpoint:       endpoint,
-		ClientSubID:    msg.ID,
-		TTL:            time.Now().Add(ttl).Unix(),
-	}
-
-	if err := h.Subs.Put(ctx, sub); err != nil {
-		logger.Error().Err(err).Msg("failed to store subscription")
-		if sendErr := h.postToConnection(ctx, endpoint, connID, ErrorMessage(msg.ID, "internal error")); sendErr != nil {
-			logger.Error().Err(sendErr).Msg("failed to send error")
+	for i, topic := range topics {
+		sub := subscriptiondao.Subscription{
+			// One row per topic; index keeps the primary key unique while the
+			// shared ClientSubID ties them to the one client subscription.
+			SubscriptionID: connID + "#" + msg.ID + "#" + strconv.Itoa(i),
+			ConnectionID:   connID,
+			Topic:          topic,
+			Endpoint:       endpoint,
+			ClientSubID:    msg.ID,
+			TTL:            time.Now().Add(ttl).Unix(),
 		}
-		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
-	}
 
-	logger.Info().
-		Str("sub_id", msg.ID).
-		Str("field", fieldName).
-		Str("topic", topic).
-		Msg("subscription created")
+		if err := h.Subs.Put(ctx, sub); err != nil {
+			logger.Error().Err(err).Str("topic", topic).Msg("failed to store subscription")
+			if sendErr := h.postToConnection(ctx, endpoint, connID, ErrorMessage(msg.ID, "internal error")); sendErr != nil {
+				logger.Error().Err(sendErr).Msg("failed to send error")
+			}
+			return events.APIGatewayProxyResponse{StatusCode: 500}, nil
+		}
 
-	// Send the most recent cached payload as an initial message so the
-	// subscriber doesn't have to wait for the next live event.
-	if h.LatestCache != nil {
-		latest, err := h.LatestCache.Get(ctx, topic)
-		if err != nil {
-			logger.Warn().Err(err).Str("topic", topic).Msg("failed to read latest cache")
-		} else if latest != nil {
-			initMsg, err := NextMessage(msg.ID, json.RawMessage(latest.Payload), latest.MessageID)
+		logger.Info().
+			Str("sub_id", msg.ID).
+			Str("field", fieldName).
+			Str("topic", topic).
+			Msg("subscription created")
+
+		// Send the most recent cached payload for this topic as an initial
+		// message so the subscriber doesn't have to wait for the next event.
+		if h.LatestCache != nil {
+			latest, err := h.LatestCache.Get(ctx, topic)
 			if err != nil {
-				logger.Warn().Err(err).Msg("failed to build initial message")
-			} else if sendErr := h.postToConnection(ctx, endpoint, connID, initMsg); sendErr != nil {
-				logger.Warn().Err(sendErr).Msg("failed to send initial cached message")
-			} else {
-				logger.Debug().Str("topic", topic).Msg("sent initial cached message")
+				logger.Warn().Err(err).Str("topic", topic).Msg("failed to read latest cache")
+			} else if latest != nil {
+				initMsg, err := NextMessage(msg.ID, json.RawMessage(latest.Payload), latest.MessageID)
+				if err != nil {
+					logger.Warn().Err(err).Msg("failed to build initial message")
+				} else if sendErr := h.postToConnection(ctx, endpoint, connID, initMsg); sendErr != nil {
+					logger.Warn().Err(sendErr).Msg("failed to send initial cached message")
+				} else {
+					logger.Debug().Str("topic", topic).Msg("sent initial cached message")
+				}
 			}
 		}
 	}
@@ -258,8 +272,9 @@ func (h *Handler) handleSubscribe(ctx context.Context, logger zerolog.Logger, co
 }
 
 func (h *Handler) handleComplete(ctx context.Context, logger zerolog.Logger, connID string, msg *GraphQLWSMessage) (events.APIGatewayProxyResponse, error) {
-	subID := connID + "#" + msg.ID
-	if err := h.Subs.Delete(ctx, subID); err != nil {
+	// A client subscription may have fanned out to several topic rows; remove
+	// them all by their shared ClientSubID.
+	if err := h.Subs.DeleteByConnectionAndClientSubID(ctx, connID, msg.ID); err != nil {
 		logger.Error().Err(err).Str("sub_id", msg.ID).Msg("failed to delete subscription")
 	}
 	logger.Info().Str("sub_id", msg.ID).Msg("subscription completed")

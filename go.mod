@@ -17,12 +17,14 @@ require (
 	github.com/aws/aws-dax-go v1.2.14
 	github.com/aws/aws-sdk-go v1.55.8
 	github.com/blinklabs-io/gouroboros v0.180.0
+	github.com/fxamacker/cbor/v2 v2.9.2
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/harlow/kinesis-consumer v0.3.5
 	github.com/savaki/bech32 v0.0.0-20220223220548-20f899656a90
 	github.com/savaki/ddb v0.0.0-20231021205115-8066867efca2
 	github.com/savaki/secrets v0.0.0-20190922033623-b598ff4dabfc
 	github.com/tj/assert v0.0.3
+	golang.org/x/crypto v0.52.0
 	golang.org/x/sync v0.19.0
 )
 
@@ -45,7 +47,6 @@ require (
 	github.com/decred/dcrd/crypto/blake256 v1.1.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
 	github.com/ethereum/go-ethereum v1.17.3 // indirect
-	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
@@ -63,7 +64,6 @@ require (
 	github.com/utxorpc/go-codegen v0.19.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
-	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220609144429-65e65417b02f // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
