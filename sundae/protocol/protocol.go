@@ -167,6 +167,8 @@ func (p Protocol) GetPoolNFT(ident string) (shared.AssetID, error) {
 	case V3:
 		fallthrough
 	case Stableswaps:
+		fallthrough
+	case V4:
 		return shared.FromSeparate(poolScriptHash, V3PoolNFTHexPrefix+ident), nil
 	default:
 		return "", fmt.Errorf("unrecognized protocol version %v", p.Version)
@@ -194,6 +196,8 @@ func (p Protocol) IsPoolNFT(assetId shared.AssetID) (bool, error) {
 	case V3:
 		fallthrough
 	case Stableswaps:
+		fallthrough
+	case V4:
 		return strings.HasPrefix(assetId.AssetName(), V3PoolNFTHexPrefix), nil
 	default:
 		return false, fmt.Errorf("unrecognized protocol version %v", p.Version)
@@ -226,6 +230,8 @@ func (p Protocol) GetLPAsset(ident string) (shared.AssetID, error) {
 	case V3:
 		fallthrough
 	case Stableswaps:
+		fallthrough
+	case V4:
 		return shared.FromSeparate(poolScriptHash, V3LPHexPrefix+ident), nil
 	default:
 		return "", fmt.Errorf("unrecognized protocol version %v", p.Version)
@@ -253,6 +259,8 @@ func (p Protocol) IsLPAsset(assetId shared.AssetID) (bool, error) {
 	case V3:
 		fallthrough
 	case Stableswaps:
+		fallthrough
+	case V4:
 		return strings.HasPrefix(assetId.AssetName(), V3LPHexPrefix), nil
 	default:
 		return false, fmt.Errorf("unrecognized protocol version %v", p.Version)
@@ -280,6 +288,8 @@ func (p Protocol) GetIdent(assetId shared.AssetID) (string, bool, error) {
 	case V3:
 		fallthrough
 	case Stableswaps:
+		fallthrough
+	case V4:
 		switch {
 		case strings.HasPrefix(assetId.AssetName(), V3PoolNFTHexPrefix):
 			return strings.TrimPrefix(assetId.AssetName(), V3PoolNFTHexPrefix), true, nil

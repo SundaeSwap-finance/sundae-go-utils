@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/shared"
 	sundaegql "github.com/SundaeSwap-finance/sundae-go-utils/sundae-gql"
 	"github.com/tj/assert"
 )
@@ -96,4 +97,62 @@ func Test_GetLPToken(t *testing.T) {
 	v3LpId, err := v3Protocol.GetLPAsset("1750b21414d4198763ee4d442f5c03a295a13a6028def9be4a785463")
 	assert.Nil(t, err)
 	assert.EqualValues(t, "633a136877ed6ad0ab33e69a22611319673474c8bd0a79a4c76d9289.6c70201750b21414d4198763ee4d442f5c03a295a13a6028def9be4a785463", v3LpId)
+}
+
+// V4 blueprints use the same dotted validator titles as earlier versions, and
+// the LP / pool NFT names share V3's CIP-68 labels.
+func Test_V4Protocol(t *testing.T) {
+	v4ProtocolBytes := []byte(`{
+		"Version": "V4",
+		"Environment": "foo",
+		"Blueprint": {
+			"Validators": [
+				{
+					"Title": "pool.mint",
+					"Hash": "20d919fa44c2f96e319857b14f8e6945d83ed5df054b1b7f94b35b45",
+					"CompiledCode": "000000"
+				}
+			]
+		},
+		"References": [],
+		"Network": "testnet"
+	}`)
+
+	var v4Protocol Protocol
+	assert.Nil(t, json.Unmarshal(v4ProtocolBytes, &v4Protocol))
+
+	const ident = "c618676e6e120cbf6742727ce06352f6e018ffcdad33a0931ef4716b"
+	lpAssetId := shared.AssetID("20d919fa44c2f96e319857b14f8e6945d83ed5df054b1b7f94b35b45.0014df10" + ident)
+	nftAssetId := shared.AssetID("20d919fa44c2f96e319857b14f8e6945d83ed5df054b1b7f94b35b45.000de140" + ident)
+
+	gotLp, err := v4Protocol.GetLPAsset(ident)
+	assert.Nil(t, err)
+	assert.EqualValues(t, lpAssetId, gotLp)
+
+	gotNft, err := v4Protocol.GetPoolNFT(ident)
+	assert.Nil(t, err)
+	assert.EqualValues(t, nftAssetId, gotNft)
+
+	isLp, err := v4Protocol.IsLPAsset(lpAssetId)
+	assert.Nil(t, err)
+	assert.True(t, isLp)
+
+	isNft, err := v4Protocol.IsPoolNFT(nftAssetId)
+	assert.Nil(t, err)
+	assert.True(t, isNft)
+
+	gotIdent, ok, err := v4Protocol.GetIdent(lpAssetId)
+	assert.Nil(t, err)
+	assert.True(t, ok)
+	assert.EqualValues(t, ident, gotIdent)
+
+	// A foreign policy must not classify — and must not error either, so
+	// Protocols iteration over a set including V4 stays usable.
+	isLp, err = v4Protocol.IsLPAsset(shared.AssetID("44a1eb2d9f58add4eb1932bd0048e6a1947e85e3fe4f32956a110414.0014df10" + ident))
+	assert.Nil(t, err)
+	assert.False(t, isLp)
+
+	_, ok, err = v4Protocol.GetIdent(shared.AssetID("44a1eb2d9f58add4eb1932bd0048e6a1947e85e3fe4f32956a110414.0014df10" + ident))
+	assert.Nil(t, err)
+	assert.False(t, ok)
 }
