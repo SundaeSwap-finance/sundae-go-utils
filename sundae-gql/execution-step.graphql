@@ -1,0 +1,63 @@
+"""
+The kind of an ExecutionStep. POOL_SWAP is a swap through a Sundae pool; the
+others are non-Sundae actions that can appear in a route (e.g. minting ADAb
+from ADA).
+"""
+enum StepKind {
+    POOL_SWAP
+    MINT
+    WRAP
+    BRIDGE
+}
+
+"""
+One step of an execution route, shared by predicted plans (a quote) and
+realized executions (an order that has been scooped). A route is a DAG: each
+step draws its input from its `predecessors`' outputs — empty predecessors mean
+the step draws directly from the route's given asset (a source). Amount fields
+are always populated by a quote; a realized order step leaves them null until
+per-step amount attribution lands (the aggregate is on the order totals).
+"""
+type ExecutionStep {
+    """
+    The pool this step swaps through. Present for POOL_SWAP steps; null for
+    non-Sundae steps.
+    """
+    pool: Pool
+    """
+    What kind of step this is.
+    """
+    kind: StepKind
+    """
+    For a realized order step, the pool action performed: `swap` / `deposit` /
+    `withdraw` / `claim`. Null for predicted quote steps, which are described by
+    `kind`.
+    """
+    operation: String
+    """
+    The quantity and asset this step consumes.
+    """
+    input: AssetAmount
+    """
+    The quantity and asset this step produces.
+    """
+    output: AssetAmount
+    """
+    Indices (into the route's steps) whose output feeds this step's input.
+    Empty means the step draws directly from the route's given asset. Always
+    strictly less than this step's own index, so a single forward pass executes
+    the plan.
+    """
+    predecessors: [Int!]!
+    """
+    Realized-only: position of the spent pool UTxO among the scoop transaction's
+    inputs. With the scoop tx hash and transcriptIndex this re-derives on-chain
+    semantics. Null for predicted quote steps.
+    """
+    poolInputIndex: Int
+    """
+    Realized-only: position of this step within that pool's own transcript list.
+    Null for predicted quote steps.
+    """
+    transcriptIndex: Int
+}
