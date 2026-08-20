@@ -82,7 +82,7 @@ func DefaultRouter(logger zerolog.Logger) chi.Router {
 // Start listening / serving a graphql server, or as a Lambda function
 func Serve(router chi.Router, config *BaseConfig) error {
 	if sundaecli.CommonOpts.Console {
-		config.Logger.Info().Str("env", sundaecli.CommonOpts.Env).Int("port", sundaecli.CommonOpts.Port).Msgf("starting %v", config.Service.Name)
+		config.Logger.Info().Str("env", sundaecli.CommonOpts.Env).Str("network", sundaecli.CommonOpts.Network).Int("port", sundaecli.CommonOpts.Port).Msgf("starting %v", config.Service.Name)
 		addr := fmt.Sprintf(":%v", sundaecli.CommonOpts.Port)
 		if config.Service.Subpath != "" {
 			newRouter := chi.NewRouter()
@@ -92,7 +92,7 @@ func Serve(router chi.Router, config *BaseConfig) error {
 		return http.ListenAndServe(addr, router)
 	}
 
-	config.Logger.Info().Str("env", sundaecli.CommonOpts.Env).Msgf("starting %v", config.Service.Name)
-	lambda.Start(apigateway.Wrap(router, sundaecli.CommonOpts.Env, config.Service.Subpath))
+	config.Logger.Info().Str("env", sundaecli.CommonOpts.Network).Str("network", sundaecli.CommonOpts.Network).Msgf("starting %v", config.Service.Name)
+	lambda.Start(apigateway.Wrap(router, sundaecli.CommonOpts.Network, config.Service.Subpath))
 	return nil
 }

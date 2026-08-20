@@ -74,22 +74,27 @@ func HasNoStakeAddress(address string) (bool, error) {
 	return hasNoStakeAddress(bytes), nil
 }
 
-// EnvToNetworkID returns the CIP-19 network ID for the named env (0 for
+// NetworkNameToID returns the CIP-19 network ID for the named network (0 for
 // preview / preprod / any other testnet, 1 for mainnet). Mirrors
-// EnvToSlotOffset's env handling so address-builders can stay env-driven
-// like time helpers.
-func EnvToNetworkID(env string) (byte, error) {
-	if env == "" {
-		env = sundaecli.CommonOpts.Env
+// NetworkToSlotOffset's network handling so address-builders can stay
+// network-driven like time helpers.
+func NetworkNameToID(network string) (byte, error) {
+	if network == "" {
+		network = sundaecli.CommonOpts.Network
 	}
-	switch env {
+	switch network {
 	case "preview", "preprod":
 		return 0, nil
 	case "mainnet", "cardano-tom":
 		return 1, nil
 	default:
-		return 0, fmt.Errorf("unrecognized environment %v", env)
+		return 0, fmt.Errorf("unrecognized network %v", network)
 	}
+}
+
+// EnvToNetworkID is deprecated, use NetworkToNetworkID instead
+func EnvToNetworkID(env string) (byte, error) {
+	return NetworkNameToID(env)
 }
 
 func SplitAddress(address string) (paymentCredential, stakingCredential []byte, err error) {

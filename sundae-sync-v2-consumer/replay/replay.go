@@ -58,7 +58,7 @@ type AdvanceFunc func(ctx context.Context, tx ledger.Transaction, slot uint64, t
 type Config struct {
 	BlockDir    string      // path to a mounted bucket (contains blocks/by-hash/...). Filesystem source.
 	BlockSource BlockSource // pluggable block source — use for direct-S3 reads, an in-memory test source, etc.
-	LookupTable string      // DynamoDB lookup table name (e.g. "{env}-sundae-sync-v2--lookup")
+	LookupTable string      // DynamoDB lookup table name (e.g. "{network}-sundae-sync-v2--lookup")
 	StartHeight uint64      // first height to process (used as the initial open-ended chunk start in single-machine mode)
 	Workers     int         // number of parallel workers (default 64)
 }
