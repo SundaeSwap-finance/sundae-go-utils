@@ -126,6 +126,7 @@ func (h *SyncV2Consumer) StartLambda(c *cli.Context) error {
 		S3:      h.S3,
 		Env:     sundaecli.CommonOpts.Env,
 		Account: SyncV2ConsumerOpts.Account,
+		Bucket:  SyncV2ConsumerOpts.Bucket,
 	}
 	syncer := Syncer{
 		Logger:     h.Logger,
@@ -175,6 +176,7 @@ func (h *SyncV2Consumer) StartKinesis(c *cli.Context) error {
 		S3:      h.S3,
 		Env:     sundaecli.CommonOpts.Env,
 		Account: SyncV2ConsumerOpts.Account,
+		Bucket:  SyncV2ConsumerOpts.Bucket,
 	}
 	syncer := Syncer{
 		Logger:     h.Logger,
@@ -240,6 +242,7 @@ func (h *SyncV2Consumer) RunOne(c *cli.Context) error {
 		S3:      h.S3,
 		Env:     sundaecli.CommonOpts.Env,
 		Account: SyncV2ConsumerOpts.Account,
+		Bucket:  SyncV2ConsumerOpts.Bucket,
 	}
 
 	tx, err := h.Tx.Get(ctx, SyncV2ConsumerOpts.Transaction)
