@@ -13,6 +13,7 @@ import (
 	"sort"
 	"time"
 
+	sundaeaws "github.com/SundaeSwap-finance/sundae-go-utils/sundae-aws"
 	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
@@ -43,7 +44,7 @@ func NewHandler(
 	reportName string,
 	generate GenerateCallback,
 ) *Handler {
-	session := session.Must(session.NewSession(aws.NewConfig()))
+	session := session.Must(session.NewSession(sundaeaws.Config()))
 	return &Handler{
 		service:    service,
 		logger:     sundaecli.Logger(service),

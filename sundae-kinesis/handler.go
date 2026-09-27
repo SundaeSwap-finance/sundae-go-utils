@@ -21,13 +21,14 @@ import (
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync"
 	"github.com/SundaeSwap-finance/ogmigo/v6/ouroboros/chainsync/compatibility"
 	"github.com/SundaeSwap-finance/sundae-go-utils/cardano"
+	sundaeaws "github.com/SundaeSwap-finance/sundae-go-utils/sundae-aws"
 	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
 	"github.com/SundaeSwap-finance/sundae-go-utils/sundae-kinesis/cursordao"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/kinesis"
 	consumer "github.com/harlow/kinesis-consumer"
 	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v2"
@@ -70,7 +71,7 @@ func NewHandler(
 	rollForwardTx RollForwardTxCallback,
 	rollBackward RollBackwardCallback,
 ) *Handler {
-	session := session.Must(session.NewSession(aws.NewConfig()))
+	session := session.Must(session.NewSession(sundaeaws.Config()))
 	api := dynamodb.New(session)
 	return &Handler{
 		Service:          service,
@@ -276,6 +277,8 @@ func (h *Handler) handleRealtime() error {
 	} else {
 		options = append(options, consumer.WithShardIteratorType("LATEST"))
 	}
+	// The consumer otherwise builds its own client, which ignores endpoint overrides.
+	options = append(options, consumer.WithClient(kinesis.New(sundaeaws.NewSession())))
 	c, err := consumer.New(streamName, options...)
 	if err != nil {
 		return err

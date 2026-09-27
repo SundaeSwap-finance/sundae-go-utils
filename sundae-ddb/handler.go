@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	sundaeaws "github.com/SundaeSwap-finance/sundae-go-utils/sundae-aws"
 	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
@@ -109,7 +110,7 @@ func (h *Handler) HandleSingleRecord(ctx context.Context, record ddb.Record) err
 }
 
 func (h *Handler) handleRealtime() error {
-	session := session.Must(session.NewSession(aws.NewConfig()))
+	session := session.Must(session.NewSession(sundaeaws.Config()))
 	streams := dynamodbstreams.New(session)
 	ss, err := streams.ListStreams(&dynamodbstreams.ListStreamsInput{
 		TableName: aws.String(DDBOpts.TableName),

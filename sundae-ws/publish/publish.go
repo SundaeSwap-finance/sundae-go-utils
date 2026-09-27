@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	sundaeaws "github.com/SundaeSwap-finance/sundae-go-utils/sundae-aws"
 	"github.com/SundaeSwap-finance/sundae-go-utils/sundae-ws/latestdao"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -48,7 +49,7 @@ func New(client kinesisiface.KinesisAPI, streamName string) *Publisher {
 // Build creates a new Publisher using the standard stream name for the given
 // environment.
 func Build(env string) *Publisher {
-	sess := session.Must(session.NewSession(aws.NewConfig()))
+	sess := session.Must(session.NewSession(sundaeaws.Config()))
 	client := kinesis.New(sess)
 	return New(client, StreamName(env))
 }

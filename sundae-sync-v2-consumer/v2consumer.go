@@ -13,9 +13,9 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/blinklabs-io/gouroboros/ledger"
@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
+	sundaeaws "github.com/SundaeSwap-finance/sundae-go-utils/sundae-aws"
 	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
 	"github.com/SundaeSwap-finance/sundae-go-utils/sundae-sync-v2-consumer/dao/txdao"
 	"github.com/SundaeSwap-finance/sundae-go-utils/sundae-sync-v2-consumer/replay"
@@ -76,7 +77,7 @@ type SyncV2Consumer struct {
 
 func New(advance AdvanceFunc, undo UndoFunc, logger *zerolog.Logger) SyncV2Consumer {
 	var (
-		s   = session.Must(session.NewSession(aws.NewConfig()))
+		s   = sundaeaws.NewSession()
 		s3  = s3.New(s)
 		db  = dynamodb.New(s)
 		txs = txdao.Build(db)
@@ -162,6 +163,8 @@ func (h *SyncV2Consumer) StartKinesis(c *cli.Context) error {
 		h.Logger.Info().Str("timestamp", ts.Format("2006-01-02 15:04:05")).Msg("Starting at timestamp")
 		options = append(options, consumer.WithShardIteratorType("AT_TIMESTAMP"), consumer.WithTimestamp(*ts))
 	}
+	// The consumer otherwise builds its own client, which ignores endpoint overrides.
+	options = append(options, consumer.WithClient(kinesis.New(sundaeaws.NewSession())))
 	k, err := consumer.New(SyncV2ConsumerOpts.Stream, options...)
 	if err != nil {
 		return err
@@ -217,8 +220,10 @@ func (h *SyncV2Consumer) StartReplay(c *cli.Context) error {
 	// SharedConfigEnable so AWS_PROFILE works for `--start-height` runs invoked
 	// from a developer's shell. The Kinesis/Lambda paths use the host runtime's
 	// role and never hit this code. h.S3 was built without SharedConfig in
-	// New(), so it also gets a fresh client here.
+	// New(), so it also gets a fresh client here. The config honors
+	// AWS_ENDPOINT_URL[_<SERVICE>] for local emulators (see sundaeaws).
 	awsSess := session.Must(session.NewSessionWithOptions(session.Options{
+		Config:            *sundaeaws.Config(),
 		SharedConfigState: session.SharedConfigEnable,
 	}))
 	api := dynamodb.New(awsSess)
@@ -255,7 +260,7 @@ func (h *SyncV2Consumer) RunOne(c *cli.Context) error {
 		return fmt.Errorf("failed to download block: %w", err)
 	}
 	blockType := uint(blockContents[1])
-	block, err := ledger.NewBlockFromCbor(blockType, blockContents[2:])
+	block, err := ledger.NewBlockFromCbor(blockType, blockContents[2:], skipBodyHashCfg)
 	if err != nil {
 		return fmt.Errorf("failed to parse block: %w", err)
 	}
