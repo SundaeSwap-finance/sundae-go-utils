@@ -68,3 +68,6 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+// LOCAL-ONLY: Musashi (Leios prototype) era-8 decoding, branch musashi-era8 of the SundaeSwap fork.
+replace github.com/blinklabs-io/gouroboros => ../gouroboros-sundae
