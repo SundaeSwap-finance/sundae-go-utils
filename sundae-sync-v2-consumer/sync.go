@@ -126,12 +126,21 @@ func (h *Syncer) processEvent(ctx context.Context, event Message, undoFunc UndoF
 		h.Logger.Warn().Str("blockHash", hex.EncodeToString(event.Advance.Hash)).Err(err).Msg("Error decoding block for advance")
 		return err
 	}
-	for index, tx := range block.Transactions() {
+	txs := block.Transactions()
+	for index, tx := range txs {
 		if err := advanceFunc(ctx, tx, block.SlotNumber(), index); err != nil {
 			h.Logger.Warn().Str("blockHash", hex.EncodeToString(event.Advance.Hash)).Err(err).Msg("Error executing advance logic for transaction")
 			return err
 		}
 	}
+	// Mirrors the replay path's per-block "Block loaded" so a live consumer's
+	// progress is visible; otherwise it only logs failures.
+	h.Logger.Debug().
+		Uint64("slot", block.SlotNumber()).
+		Uint64("height", block.BlockNumber()).
+		Int("undone", len(event.Undo)).
+		Int("txCount", len(txs)).
+		Msg("Block advanced")
 	return nil
 }
 
