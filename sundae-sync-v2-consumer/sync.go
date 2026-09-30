@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"slices"
 
 	"golang.org/x/sync/errgroup"
 
@@ -106,9 +105,8 @@ func (h *Syncer) processEvent(ctx context.Context, event Message, undoFunc UndoF
 			return err
 		}
 		txs := block.Transactions()
-		slices.Reverse(txs)
-		for index, tx := range txs {
-			if err := undoFunc(ctx, tx, block.SlotNumber(), index); err != nil {
+		for index := len(txs) - 1; index >= 0; index-- {
+			if err := undoFunc(ctx, txs[index], block.SlotNumber(), index); err != nil {
 				h.Logger.Warn().Str("blockHash", hex.EncodeToString(undo.Hash)).Err(err).Msg("Error executing undo logic for transaction")
 				return err
 			}
