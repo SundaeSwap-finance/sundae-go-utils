@@ -88,20 +88,14 @@ func SlotToDateTimeEnv(slot uint64, env string) (DateTime, error) {
 	return SlotToDateTime(slot, slotOffset), nil
 }
 
+// TimeToSlotEnv uses the same offsets as EnvToSlotOffset, including its fallback to
+// --slot-offset for environments without a built-in offset (custom networks).
 func TimeToSlotEnv(time time.Time, env string) (uint64, error) {
-	if env == "" {
-		env = sundaecli.CommonOpts.Env
+	slotOffset, err := EnvToSlotOffset(env)
+	if err != nil {
+		return 0, err
 	}
-	switch env {
-	case "preview":
-		return TimeToSlot(time, SlotOffsetPreview), nil
-	case "preprod":
-		return TimeToSlot(time, SlotOffsetPreprod), nil
-	case "mainnet", "cardano-tom": // This is a bit messy, we should unravel this at some point; chain and environment should be separate
-		return TimeToSlot(time, SlotOffsetMainnet), nil
-	default:
-		return 0, fmt.Errorf("unrecognized environment %v", env)
-	}
+	return TimeToSlot(time, slotOffset), nil
 }
 
 func TimeToSlot(time time.Time, offset uint64) uint64 {
