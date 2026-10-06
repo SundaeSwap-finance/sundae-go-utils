@@ -75,7 +75,7 @@ func HasNoStakeAddress(address string) (bool, error) {
 }
 
 // EnvToNetworkID returns the CIP-19 network ID for the named env (0 for
-// preview / preprod / local devnets, 1 for mainnet). Mirrors
+// preview / preprod / musashi / local devnets, 1 for mainnet). Mirrors
 // EnvToSlotOffset's env handling so address-builders can stay env-driven
 // like time helpers.
 func EnvToNetworkID(env string) (byte, error) {
@@ -83,7 +83,7 @@ func EnvToNetworkID(env string) (byte, error) {
 		env = sundaecli.CommonOpts.Env
 	}
 	switch env {
-	case "preview", "preprod", "local":
+	case "preview", "preprod", "musashi", "local":
 		return 0, nil
 	case "mainnet", "cardano-tom":
 		return 1, nil
