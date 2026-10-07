@@ -23,7 +23,7 @@ type S3Downloader struct {
 	Account string
 	S3      s3iface.S3API
 	// Bucket overrides the default `{Env}-sundae-sync-v2-{Account}-us-east-2`
-	// bucket. Accepts a bare bucket name or an `s3://name` URI. Empty falls
+	// bucket. Accepts a bare bucket name or an `s3://name[/prefix]` URI. Empty falls
 	// back to the conventional interpolation.
 	Bucket string
 }
@@ -39,16 +39,24 @@ func (h *S3Downloader) bucketName() string {
 
 // Download a block from the S3 bucket and return the bytes
 func (h *S3Downloader) DownloadBlockSync(hash []byte) ([]byte, error) {
+	if len(hash) != 32 {
+		return nil, fmt.Errorf("invalid block hash length: %d", len(hash))
+	}
 	prefix := fmt.Sprintf("%02x", hash[0])
 	filename := fmt.Sprintf("blocks/by-hash/%v/%v.cbor", prefix, hex.EncodeToString(hash))
+	bucket, keyPrefix, _ := strings.Cut(h.bucketName(), "/")
+	if keyPrefix != "" {
+		filename = strings.Trim(keyPrefix, "/") + "/" + filename
+	}
 	resp, err := h.S3.GetObject(&s3.GetObjectInput{
-		Bucket: aws.String(h.bucketName()),
+		Bucket: aws.String(bucket),
 		Key:    aws.String(filename),
 	})
 	if err != nil {
 		h.Logger.Warn().Str("filename", filename).Err(err).Msg("Failed downloading block")
 		return nil, err
 	}
+	defer resp.Body.Close()
 	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		h.Logger.Warn().Str("filename", filename).Err(err).Msg("Failed reading block contents")
