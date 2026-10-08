@@ -68,3 +68,6 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+// Musashi (Leios prototype) era-8 decoding: branch musashi-era8 of jonathanlim222/gouroboros.
+replace github.com/blinklabs-io/gouroboros => github.com/jonathanlim222/gouroboros v0.0.0-20260927210523-b8ee3eef4789
