@@ -255,7 +255,7 @@ func (h *SyncV2Consumer) RunOne(c *cli.Context) error {
 		return fmt.Errorf("failed to download block: %w", err)
 	}
 	blockType := uint(blockContents[1])
-	block, err := ledger.NewBlockFromCbor(blockType, blockContents[2:])
+	block, err := ledger.NewBlockFromCbor(blockType, blockContents[2:], skipBodyHashCfg)
 	if err != nil {
 		return fmt.Errorf("failed to parse block: %w", err)
 	}
