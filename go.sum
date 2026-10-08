@@ -9,6 +9,8 @@ github.com/DataDog/sketches-go v0.0.0-20190923095040-43f19ad77ff7/go.mod h1:Q5Db
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20251001021608-1fe7b43fc4d6 h1:1zYrtlhrZ6/b6SAjLSfKzWtdgqK0U+HtH/VcBWh1BaU=
 github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20251001021608-1fe7b43fc4d6/go.mod h1:ioLG6R+5bUSO1oeGSDxOV3FADARuMoytZCSX6MEMQkI=
+github.com/SundaeSwap-finance/gouroboros v0.166.2-0.20260927210523-b8ee3eef4789 h1:nsN9IIljH/sC65mkL6h8L+eYVMQOcDgGDq/NqNrTL2A=
+github.com/SundaeSwap-finance/gouroboros v0.166.2-0.20260927210523-b8ee3eef4789/go.mod h1:xjA3SxWqNzlZlmaZ1aJSRctIYryGa/o1W2pivaS4J3w=
 github.com/SundaeSwap-finance/ogmigo/v6 v6.1.1-0.20251014193028-cab6e58fde5f h1:ZJ31zcHSdCSjJuC92yygxOBPgV0gNk/Kg+BtVzUmVXI=
 github.com/SundaeSwap-finance/ogmigo/v6 v6.1.1-0.20251014193028-cab6e58fde5f/go.mod h1:lcJvzDZSYrzJvgL4MChhFlPBP2qDiuJ4QJaAfi4rWV4=
 github.com/aead/siphash v1.0.1/go.mod h1:Nywa3cDsYNNK3gaciGTWPwHt0wlpNV15vwmswBAUSII=
@@ -154,8 +156,6 @@ github.com/jmespath/go-jmespath v0.4.0 h1:BEgLn5cpjn8UN1mAw4NjwDrS35OdebyEtFe+9Y
 github.com/jmespath/go-jmespath v0.4.0/go.mod h1:T8mJZnbsbmF+m6zOOFylbeCJqk5+pHWvzYPziyZiYoo=
 github.com/jmespath/go-jmespath/internal/testify v1.5.1 h1:shLQSRRSCCPj3f2gpwzGwWFoC7ycTf1rcQZHOlsJ6N8=
 github.com/jmespath/go-jmespath/internal/testify v1.5.1/go.mod h1:L3OGu8Wl2/fWfCI6z80xFu9LTZmf1ZRjMHUOPmWr69U=
-github.com/jonathanlim222/gouroboros v0.0.0-20260927210523-b8ee3eef4789 h1:W3QBHxXbsUqvsatNMCspVAQKF8kUuNL/HcDgPTVKkM8=
-github.com/jonathanlim222/gouroboros v0.0.0-20260927210523-b8ee3eef4789/go.mod h1:xjA3SxWqNzlZlmaZ1aJSRctIYryGa/o1W2pivaS4J3w=
 github.com/jpillora/backoff v0.0.0-20180909062703-3050d21c67d7/go.mod h1:2iMrUgbbvHEiQClaW2NsSzMyGHqN+rDFqY705q49KG0=
 github.com/jrick/logrotate v1.0.0/go.mod h1:LNinyqDIJnpAur+b8yyulnQw/wDuN1+BYKlTRt3OuAQ=
 github.com/kkdai/bstream v0.0.0-20161212061736-f391b8402d23/go.mod h1:J+Gs4SYgM6CZQHDETBtE9HaSEkGmuNXF86RwHhHUvq4=

@@ -69,5 +69,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-// Musashi (Leios prototype) era-8 decoding: branch musashi-era8 of jonathanlim222/gouroboros.
-replace github.com/blinklabs-io/gouroboros => github.com/jonathanlim222/gouroboros v0.0.0-20260927210523-b8ee3eef4789
+// Musashi (Leios prototype) era-8 decoding: branch musashi of SundaeSwap-finance/gouroboros.
+replace github.com/blinklabs-io/gouroboros => github.com/SundaeSwap-finance/gouroboros v0.166.2-0.20260927210523-b8ee3eef4789
