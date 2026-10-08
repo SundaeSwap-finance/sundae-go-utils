@@ -42,6 +42,8 @@ const (
 	SlotOffsetPreview = 1666656000
 	SlotOffsetPreprod = 1655683200
 	SlotOffsetMainnet = 1591566291
+	// SlotOffsetMusashi is the Musashi (Leios prototype) devnet system start.
+	SlotOffsetMusashi = 1788739200
 )
 
 func EnvToSlotOffset(env string) (uint64, error) {
@@ -53,6 +55,8 @@ func EnvToSlotOffset(env string) (uint64, error) {
 		return SlotOffsetPreview, nil
 	case "preprod":
 		return SlotOffsetPreprod, nil
+	case "musashi":
+		return SlotOffsetMusashi, nil
 	case "mainnet", "cardano-tom": // This is a bit messy, we should unravel this at some point; chain and environment should be separate
 		return SlotOffsetMainnet, nil
 	default:

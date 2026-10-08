@@ -83,7 +83,7 @@ func EnvToNetworkID(env string) (byte, error) {
 		env = sundaecli.CommonOpts.Env
 	}
 	switch env {
-	case "preview", "preprod":
+	case "preview", "preprod", "musashi":
 		return 0, nil
 	case "mainnet", "cardano-tom":
 		return 1, nil
