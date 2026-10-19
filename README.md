@@ -132,6 +132,49 @@ Blockchain synchronization consumer for processing Cardano transactions from sun
 - Parallel block downloading
 - DynamoDB transaction tracking
 
+**Sub-transactions:**
+
+Live sync and replay still invoke advance/undo once per top-level transaction,
+with its original block transaction index. Inside a callback, use
+`syncV2Consumer.WalkTransaction` to visit sub-transactions in ledger order,
+then the parent. Each `TransactionView` pairs its own `ID` and `Body` with its
+own `Witnesses`; never merge input lists before interpreting redeemer indices.
+
+For example, an indexer of regular order outputs can use this pattern
+(`indexOrders` is application-specific and reports whether it persisted any
+relevant effects):
+
+```go
+func advance(ctx context.Context, tx ledger.Transaction, slot uint64, txIndex int) error {
+    if !tx.IsValid() {
+        // Regular outputs were not produced. An indexer that tracks collateral
+        // must handle tx.Produced()/tx.Consumed() here instead.
+        return nil
+    }
+    return syncV2Consumer.WalkTransaction(tx, func(view syncV2Consumer.TransactionView) error {
+        relevant, err := indexOrders(ctx, view.ID, view.Body.Outputs(), view.Witnesses.PlutusData())
+        if err != nil || !relevant {
+            return err
+        }
+        // Publish the producing ID, including sub-transaction IDs, only after
+        // effects are persisted. This is a no-op outside distributed replay.
+        return replay.PublishRelevantTx(ctx, view.ID.String())
+    })
+}
+```
+
+Use `view.Body.Inputs()` with `view.Witnesses.Redeemers()` for spend processing.
+Inline datums remain on outputs; `Witnesses.PlutusData()` contains witness
+datums only. The walker is structural and does not filter invalid transactions;
+use the enclosing transaction's `Produced()`/`Consumed()` for actual ledger
+effects (including collateral).
+
+Rollback must remove the same `(producing ID, output index)` keys. If undo
+operations depend on order, collect the views and undo them in reverse:
+parent first, then sub-transactions in reverse ledger order. Do not wait for
+replay completion of an earlier sub-transaction within the same enclosing
+callback: local completion is recorded only after that callback returns.
+
 ### sundae-rest
 
 REST API utilities with CORS support and common middleware.
