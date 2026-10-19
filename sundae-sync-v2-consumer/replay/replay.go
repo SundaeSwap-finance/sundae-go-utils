@@ -46,11 +46,13 @@ import (
 // flag is applied in the live consumer (sync.go) for the same reason.
 var skipBodyHashCfg = common.VerifyConfig{SkipBodyHashValidation: true}
 
-// AdvanceFunc is called for each transaction during replay.
+// AdvanceFunc is called once per top-level transaction during replay.
 // It has the same signature as the live syncV2Consumer advance function.
 // Call WaitForHeight or WaitForTx from within this function to express a
 // dependency. For relevant transactions in distributed mode, call
-// PublishRelevantTx after work is done so other workers can find it.
+// PublishRelevantTx for each relevant producing ID after work is done so other
+// workers can find it. Local completion of the parent and its producing
+// sub-transactions is recorded only after this callback returns successfully.
 type AdvanceFunc func(ctx context.Context, tx ledger.Transaction, slot uint64, txIndex int) error
 
 // Config configures the block replay. Exactly one of BlockDir or BlockSource
@@ -430,11 +432,24 @@ func (r *Replayer) processHeight(ctx context.Context, rec heightRecord) error {
 		if rctx.Err() != nil {
 			return rctx.Err()
 		}
-		txHash := tx.Hash().String()
+		txID := tx.Hash()
+		txHash := txID.String()
 		if err := r.advance(rctx, tx, slot, txIdx); err != nil {
 			return fmt.Errorf("tx %s: %w", txHash, err)
 		}
+		// Preserve parent completion even when it produces no outputs. Use
+		// actual ledger effects for the additional IDs: invalid transactions
+		// produce only collateral returns, not their sub-transaction outputs.
 		r.tracker.MarkTxProcessed(txHash, rec.Height)
+		seen := map[common.Blake2b256]struct{}{txID: {}}
+		for _, utxo := range tx.Produced() {
+			id := utxo.Id.Id()
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			r.tracker.MarkTxProcessed(id.String(), rec.Height)
+		}
 	}
 
 	r.tracker.MarkDone(rec.Height)
@@ -465,12 +480,14 @@ func WaitForHeight(ctx context.Context, height uint64) error {
 // AdvanceFunc. Resolution order:
 //
 //  1. Local in-memory heightTracker for this chunk (fast, no network).
-//  2. Coordinator.FindTx — for distributed replays, looks in the shared
-//     DDB tx table to see if another worker has processed and published it.
-//  3. If neither finds it and the chunk's local watermark has passed the
-//     calling worker's height, the tx is treated as pre-range and we
-//     return nil — the caller can fall through to a DDB lookup or treat
-//     as not-found.
+//  2. Once the local watermark reaches the height before the calling worker's
+//     height, check Coordinator.FindTx once for cross-chunk publication.
+//  3. If neither finds it, return nil — the caller can fall through to its
+//     own lookup/retry or treat the transaction as not-found.
+//
+// Producing sub-transaction IDs become locally available when their enclosing
+// top-level callback succeeds. Do not wait on a sibling sub-transaction from
+// inside that same callback; process those effects in ledger order instead.
 //
 // If called outside of a replay context, this is a no-op and returns nil.
 func WaitForTx(ctx context.Context, txHash string) error {
@@ -487,7 +504,8 @@ func WaitForTx(ctx context.Context, txHash string) error {
 // "relevant" for cross-chunk dependency resolution. AdvanceFuncs should call
 // this for transactions whose effects another worker might call WaitForTx on
 // (e.g. SundaeSwap pool/order operations whose outputs become inputs to
-// later scoops).
+// later scoops). Publish each relevant producing ID, including sub-transaction
+// IDs, after persisting its effects; publishing only the parent is insufficient.
 //
 // In single-machine mode this is a no-op (the local heightTracker already
 // records every tx automatically). In distributed mode it writes to the
