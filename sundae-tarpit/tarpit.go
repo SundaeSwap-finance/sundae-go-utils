@@ -142,18 +142,23 @@ func Middleware(src Source, cfg Config) func(http.Handler) http.Handler {
 	}
 }
 
-// ClientIP returns the caller address with no port. It prefers the first
-// X-Forwarded-For entry, which the API Gateway wrapper copies into the request;
-// it falls back to RemoteAddr. The logic matches the claim policy in
-// rewards-distribution so a ban keyed on one IP matches the bait keyed on the
-// same IP.
+// ClientIP returns the caller address with no port.
+//
+// Behind API Gateway the request carries X-Forwarded-For. A caller can send its
+// own X-Forwarded-For, and API Gateway keeps those entries and appends the real
+// TCP source as the last entry. So the last entry is the trusted client
+// address, and any earlier entries are caller-controlled. Taking the last entry
+// stops a caller from evading an IP match by prepending a forged address. This
+// assumes one trusted proxy hop (API Gateway) in front of the service.
+//
+// With no header, RemoteAddr is used, which covers local serving.
 func ClientIP(r *http.Request) string {
 	addr := r.Header.Get("x-forwarded-for")
 	if addr == "" {
 		addr = r.RemoteAddr
 	}
-	if i := strings.Index(addr, ","); i >= 0 {
-		addr = addr[:i]
+	if i := strings.LastIndex(addr, ","); i >= 0 {
+		addr = addr[i+1:]
 	}
 	addr = strings.TrimSpace(addr)
 	if host, _, err := net.SplitHostPort(addr); err == nil {

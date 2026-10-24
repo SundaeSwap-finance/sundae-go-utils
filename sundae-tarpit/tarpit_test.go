@@ -74,9 +74,14 @@ func TestExemptPathReachesHandlerEvenForBaitIP(t *testing.T) {
 	}
 }
 
-func TestClientIPPrefersForwardedFor(t *testing.T) {
-	// The first X-Forwarded-For entry wins, with the port stripped.
-	if got := ClientIP(newRequest("/", "1.2.3.4, 10.0.0.1")); got != "1.2.3.4" {
+func TestClientIPUsesLastForwardedForEntry(t *testing.T) {
+	// The last X-Forwarded-For entry wins: API Gateway appends the real source
+	// there, and a caller cannot forge past it by prepending entries.
+	if got := ClientIP(newRequest("/", "203.0.113.7, 200.181.82.126")); got != "200.181.82.126" {
+		t.Fatalf("ClientIP = %q, want 200.181.82.126 (a prepended forged entry must be ignored)", got)
+	}
+	// A single entry (no forged prefix) resolves to that entry.
+	if got := ClientIP(newRequest("/", "1.2.3.4")); got != "1.2.3.4" {
 		t.Fatalf("ClientIP = %q, want 1.2.3.4", got)
 	}
 	// With no header, fall back to RemoteAddr with the port stripped.
