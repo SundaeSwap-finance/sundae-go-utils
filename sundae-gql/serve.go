@@ -74,6 +74,7 @@ func DefaultRouter(logger zerolog.Logger) chi.Router {
 		middleware.Logger,
 		WithCORS(),
 		WithLogger(logger),
+		WithRequestInfo,
 		middleware.Recoverer,
 	)
 	return router
