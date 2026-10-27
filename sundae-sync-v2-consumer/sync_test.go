@@ -41,7 +41,7 @@ func TestProcessEventPreservesTopLevelCallbackIndices(t *testing.T) {
 		Advance: Block{Contents: contents()},
 	}
 	var undoIndices, advanceIndices []int
-	var advancedIDs []string
+	var advancedIDs, undoneIDs []string
 	var ordinaryID string
 	syncer := &Syncer{Logger: zerolog.Nop()}
 	err = syncer.processEvent(context.Background(), event,
@@ -53,7 +53,10 @@ func TestProcessEventPreservesTopLevelCallbackIndices(t *testing.T) {
 			if index == 1 {
 				ordinaryID = tx.Hash().String()
 			}
-			return nil
+			return WalkTransactionReverse(tx, func(view TransactionView) error {
+				undoneIDs = append(undoneIDs, view.ID.String())
+				return nil
+			})
 		},
 		func(_ context.Context, tx ledger.Transaction, slot uint64, index int) error {
 			advanceIndices = append(advanceIndices, index)
@@ -74,5 +77,9 @@ func TestProcessEventPreservesTopLevelCallbackIndices(t *testing.T) {
 	want := []string{musashiSubTxID, musashiTxID, ordinaryID}
 	if ordinaryID == musashiTxID || !reflect.DeepEqual(advancedIDs, want) {
 		t.Fatalf("visited IDs %v, want %v", advancedIDs, want)
+	}
+	wantUndo := []string{ordinaryID, musashiTxID, musashiSubTxID}
+	if !reflect.DeepEqual(undoneIDs, wantUndo) {
+		t.Fatalf("undone IDs %v, want %v", undoneIDs, wantUndo)
 	}
 }

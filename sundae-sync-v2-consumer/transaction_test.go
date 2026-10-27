@@ -155,16 +155,23 @@ func (tx transactionWithParts) SubTransactionWitnessSets() []common.TransactionW
 
 func TestWalkTransactionWithoutSubTransactions(t *testing.T) {
 	tx := topLevelOnly{loadMusashiTransaction(t)}
-	calls := 0
-	err := WalkTransaction(tx, func(v TransactionView) error {
-		calls++
-		if v.ID != tx.Hash() || v.Body != tx {
-			t.Error("expected the original top-level transaction")
-		}
-		return nil
-	})
-	if err != nil || calls != 1 {
-		t.Fatalf("calls=%d err=%v", calls, err)
+	for name, walk := range map[string]func(ledger.Transaction, func(TransactionView) error) error{
+		"forward": WalkTransaction,
+		"reverse": WalkTransactionReverse,
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls := 0
+			err := walk(tx, func(v TransactionView) error {
+				calls++
+				if v.ID != tx.Hash() || v.Body != tx {
+					t.Error("expected the original top-level transaction")
+				}
+				return nil
+			})
+			if err != nil || calls != 1 {
+				t.Fatalf("calls=%d err=%v", calls, err)
+			}
+		})
 	}
 }
 
@@ -218,14 +225,85 @@ func TestWalkTransactionOrderAndErrors(t *testing.T) {
 func TestWalkTransactionDoesNotFilterInvalidBodies(t *testing.T) {
 	tx := loadMusashiTransaction(t)
 	tx.TxIsValid = false
-	calls := 0
-	if err := WalkTransaction(tx, func(TransactionView) error {
-		calls++
-		return nil
-	}); err != nil || calls != 2 {
-		t.Fatalf("structural traversal: calls=%d err=%v", calls, err)
+	for name, walk := range map[string]func(ledger.Transaction, func(TransactionView) error) error{
+		"forward": WalkTransaction,
+		"reverse": WalkTransactionReverse,
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls := 0
+			if err := walk(tx, func(TransactionView) error {
+				calls++
+				return nil
+			}); err != nil || calls != 2 {
+				t.Fatalf("structural traversal: calls=%d err=%v", calls, err)
+			}
+		})
 	}
 	if len(tx.Produced()) != 0 {
 		t.Fatal("invalid transaction without collateral return must produce no UTxOs")
+	}
+}
+
+func TestWalkTransactionReverseOrderAndErrors(t *testing.T) {
+	tx := loadMusashiTransaction(t)
+	// A second synthetic body with its own ID and empty witness set makes
+	// reversal of multiple children (and preservation of their pairing) visible.
+	secondBody := &dijkstra.DijkstraSubTransactionBody{}
+	secondBody.SetCbor([]byte{0xa0})
+	secondWitnesses := dijkstra.DijkstraTransactionWitnessSet{}
+	parts := transactionWithParts{
+		Transaction: tx,
+		bodies:      []common.TransactionBody{tx.SubTransactionBodies()[0], secondBody},
+		witnesses:   []common.TransactionWitnessSet{tx.SubTransactionWitnessSets()[0], secondWitnesses},
+	}
+	want := []TransactionView{
+		{ID: tx.Hash(), Body: parts, Witnesses: tx.Witnesses()},
+		{ID: secondBody.Id(), Body: secondBody, Witnesses: secondWitnesses},
+		{ID: parts.bodies[0].Id(), Body: parts.bodies[0], Witnesses: parts.witnesses[0]},
+	}
+	// stop=0 completes traversal; every other value fails at that visit.
+	// In reverse order, a parent error must prevent all child visits.
+	for stop := 0; stop <= len(want); stop++ {
+		sentinel := errors.New("undo failed")
+		var views []TransactionView
+		err := WalkTransactionReverse(parts, func(view TransactionView) error {
+			views = append(views, view)
+			if len(views) == stop {
+				return sentinel
+			}
+			return nil
+		})
+		expected := want
+		if stop > 0 {
+			expected = want[:stop]
+			if err != sentinel {
+				t.Errorf("stop %d: got %v, want original visitor error", stop, err)
+			}
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(views, expected) {
+			t.Errorf("stop %d: views are not parent, second child, first child with matching witnesses", stop)
+		}
+	}
+	for _, witnesses := range [][]common.TransactionWitnessSet{
+		nil,
+		{tx.Witnesses()},
+		{tx.Witnesses(), tx.Witnesses(), tx.Witnesses()},
+	} {
+		parts.witnesses = witnesses
+		err := WalkTransactionReverse(parts, func(TransactionView) error {
+			t.Fatal("visited the parent before validating body/witness counts")
+			return nil
+		})
+		if err == nil {
+			t.Error("expected mismatched body/witness count error")
+		}
+	}
+	if err := WalkTransactionReverse(nil, func(TransactionView) error {
+		t.Fatal("visited a nil transaction")
+		return nil
+	}); err == nil {
+		t.Error("expected nil transaction error")
 	}
 }

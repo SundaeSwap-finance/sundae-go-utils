@@ -170,8 +170,12 @@ use the enclosing transaction's `Produced()`/`Consumed()` for actual ledger
 effects (including collateral).
 
 Rollback must remove the same `(producing ID, output index)` keys. If undo
-operations depend on order, collect the views and undo them in reverse:
-parent first, then sub-transactions in reverse ledger order. Do not wait for
+operations depend on order, call `syncV2Consumer.WalkTransactionReverse` inside
+the undo callback. It visits the parent first, then sub-transactions in reverse
+ledger order, keeping each body paired with its own witnesses. Both walkers
+validate body/witness counts before any visits and stop at the first visitor
+error. The consumer still reverses the top-level transactions within the block;
+the reverse walker reverses the parts within each transaction. Do not wait for
 replay completion of an earlier sub-transaction within the same enclosing
 callback: local completion is recorded only after that callback returns.
 
