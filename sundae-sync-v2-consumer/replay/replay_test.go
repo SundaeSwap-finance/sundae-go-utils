@@ -47,6 +47,7 @@ func musashiTransactionCBOR(t *testing.T) cbor.RawMessage {
 func blockCBOR(t *testing.T, txs ...cbor.RawMessage) []byte {
 	t.Helper()
 	header := &dijkstra.DijkstraBlockHeader{}
+	fillHeaderPlaceholders(header)
 	header.Body.BlockNumber = 101
 	header.Body.Slot = 12345
 	body := encodeCBOR(t, []any{txs, nil, nil})
@@ -54,6 +55,17 @@ func blockCBOR(t *testing.T, txs ...cbor.RawMessage) []byte {
 	header.Body.BlockBodySize = uint64(len(body))
 	block := encodeCBOR(t, []any{header, body})
 	return encodeCBOR(t, []any{dijkstra.BlockTypeDijkstra, block})
+}
+
+// fillHeaderPlaceholders gives a synthetic header the fixed-length fields
+// gouroboros validates when decoding (>= v0.218). The values are zero bytes;
+// these blocks are not consensus-validated.
+func fillHeaderPlaceholders(h *dijkstra.DijkstraBlockHeader) {
+	h.Body.VrfKey = make([]byte, 32)
+	h.Body.VrfResult.Output = make([]byte, 64)
+	h.Body.VrfResult.Proof = make([]byte, 80)
+	h.Body.OpCert.HotVkey = make([]byte, 32)
+	h.Body.OpCert.Signature = make([]byte, 64)
 }
 
 type memoryBlockSource []byte

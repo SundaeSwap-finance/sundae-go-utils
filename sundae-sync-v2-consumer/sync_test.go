@@ -26,6 +26,7 @@ func TestProcessEventPreservesTopLevelCallbackIndices(t *testing.T) {
 			Transactions: []dijkstra.DijkstraTransaction{*tx, *ordinary},
 		},
 	}
+	fillHeaderPlaceholders(block.BlockHeader)
 	block.BlockHeader.Body.Slot = 12345
 	raw, err := cbor.Encode([]any{dijkstra.BlockTypeDijkstra, block})
 	if err != nil {
@@ -82,4 +83,15 @@ func TestProcessEventPreservesTopLevelCallbackIndices(t *testing.T) {
 	if !reflect.DeepEqual(undoneIDs, wantUndo) {
 		t.Fatalf("undone IDs %v, want %v", undoneIDs, wantUndo)
 	}
+}
+
+// fillHeaderPlaceholders gives a synthetic header the fixed-length fields
+// gouroboros validates when decoding (>= v0.218). The values are zero bytes;
+// these blocks are not consensus-validated.
+func fillHeaderPlaceholders(h *dijkstra.DijkstraBlockHeader) {
+	h.Body.VrfKey = make([]byte, 32)
+	h.Body.VrfResult.Output = make([]byte, 64)
+	h.Body.VrfResult.Proof = make([]byte, 80)
+	h.Body.OpCert.HotVkey = make([]byte, 32)
+	h.Body.OpCert.Signature = make([]byte, 64)
 }
