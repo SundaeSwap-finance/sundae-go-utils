@@ -1,6 +1,6 @@
 module github.com/SundaeSwap-finance/sundae-go-utils
 
-go 1.26.5
+go 1.26.10
 
 require (
 	github.com/aws/aws-lambda-go v1.41.0
@@ -9,51 +9,49 @@ require (
 	github.com/rs/zerolog v1.31.0
 	github.com/savaki/apigateway v0.0.0-20221128200736-ed62fddee4c2
 	github.com/urfave/cli/v2 v2.27.5
-	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 )
 
 require (
 	github.com/SundaeSwap-finance/ogmigo/v6 v6.1.1-0.20251014193028-cab6e58fde5f
 	github.com/aws/aws-dax-go v1.2.14
 	github.com/aws/aws-sdk-go v1.55.8
-	github.com/blinklabs-io/gouroboros v0.208.0
-	github.com/fxamacker/cbor/v2 v2.9.4
+	github.com/blinklabs-io/gouroboros v0.218.3
+	github.com/fxamacker/cbor/v2 v2.10.0
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/harlow/kinesis-consumer v0.3.5
 	github.com/savaki/bech32 v0.0.0-20220223220548-20f899656a90
 	github.com/savaki/ddb v0.0.0-20231021205115-8066867efca2
 	github.com/savaki/secrets v0.0.0-20190922033623-b598ff4dabfc
 	github.com/tj/assert v0.0.3
-	golang.org/x/crypto v0.57.0
-	golang.org/x/sync v0.22.0
+	golang.org/x/crypto v0.58.0
+	golang.org/x/sync v0.23.0
 )
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/antlr/antlr4 v0.0.0-20181218183524-be58ebffde8e // indirect
 	github.com/awslabs/kinesis-aggregation/go v0.0.0-20220610150308-f265332d248d // indirect
-	github.com/bits-and-blooms/bitset v1.24.6 // indirect
-	github.com/blinklabs-io/plutigo v0.7.2 // indirect
-	github.com/btcsuite/btcd/btcec/v2 v2.5.0 // indirect
+	github.com/bits-and-blooms/bitset v1.25.0 // indirect
+	github.com/blinklabs-io/plutigo v0.12.0 // indirect
+	github.com/btcsuite/btcd/btcec/v2 v2.5.1 // indirect
 	github.com/btcsuite/btcd/btcutil v1.2.0 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.2.0 // indirect
 	github.com/btcsuite/btcd/chainhash/v2 v2.0.0 // indirect
 	github.com/btcsuite/btcutil v1.0.2 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
-	github.com/consensys/gnark-crypto v0.21.0 // indirect
+	github.com/consensys/gnark-crypto v0.22.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
 	github.com/decred/dcrd/crypto/blake256 v1.1.0 // indirect
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/icza/bitio v1.1.0 // indirect
 	github.com/jinzhu/copier v0.4.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.3 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/utxorpc/go-codegen v0.19.2 // indirect
