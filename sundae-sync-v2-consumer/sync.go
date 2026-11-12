@@ -14,15 +14,34 @@ import (
 )
 
 // skipBodyHashCfg disables gouroboros's body-hash validation when parsing
-// blocks. Some Conway-era blocks with indefinite-length CBOR aux data fail
-// validation due to an upstream gouroboros bug — the cbor decoder strips the
-// 0xff break terminator from cbor.RawMessage extraction, so blake2b of the
-// returned bytes doesn't match what the producer node hashed. The blocks are
-// otherwise valid (Cardano consensus already accepted them and sundae-sync-v2
-// fetched them via the verified Ouroboros protocol), so this validation is
-// redundant in our pipeline and re-running it on bad-encoded blocks wedges
-// the indexer pointlessly.
+// blocks. It must stay disabled, for two independent reasons:
+//
+//  1. Dolos inlines endorser-block (EB) transactions into the block body but
+//     keeps the original header, so the header's body hash can never match
+//     the stored body. This is a property of the data, not a decoder bug, so
+//     it will not go away when gouroboros is fixed or upgraded.
+//  2. Some Conway-era blocks with indefinite-length CBOR aux data fail
+//     validation due to an upstream gouroboros bug: the cbor decoder strips
+//     the 0xff break terminator from cbor.RawMessage extraction (and tx
+//     re-encoding does not byte-equal the original), so blake2b of the
+//     returned bytes doesn't match what the producer node hashed.
+//
+// Skipping the check is safe: sundae-sync-v2 fetched these blocks over the
+// verified Ouroboros protocol, so integrity is already guaranteed upstream.
+// Re-running the check here only wedges the indexer on valid blocks.
+//
+// replay/replay.go keeps its own copy of this config; keep them in sync.
 var skipBodyHashCfg = common.VerifyConfig{SkipBodyHashValidation: true}
+
+// decodeBlock decodes an archived block payload ([tag, era, block...]) with
+// body-hash validation disabled. All block decoding in this package must go
+// through here so no call site can forget skipBodyHashCfg.
+func decodeBlock(raw []byte) (ledger.Block, error) {
+	if len(raw) < 2 {
+		return nil, fmt.Errorf("block payload too short: %d bytes", len(raw))
+	}
+	return ledger.NewBlockFromCbor(uint(raw[1]), raw[2:], skipBodyHashCfg)
+}
 
 type Syncer struct {
 	Logger     zerolog.Logger
@@ -98,8 +117,7 @@ func (h *Syncer) processEvent(ctx context.Context, event Message, undoFunc UndoF
 			h.Logger.Warn().Str("blockHash", hex.EncodeToString(undo.Hash)).Err(res.err).Msg("Failed downloading undo block")
 			return fmt.Errorf("download undo block %s: %w", hex.EncodeToString(undo.Hash), res.err)
 		}
-		blockType := uint(res.bytes[1])
-		block, err := ledger.NewBlockFromCbor(blockType, res.bytes[2:], skipBodyHashCfg)
+		block, err := decodeBlock(res.bytes)
 		if err != nil {
 			h.Logger.Warn().Str("blockHash", hex.EncodeToString(undo.Hash)).Err(err).Msg("Error decoding block for undo")
 			return err
@@ -118,8 +136,7 @@ func (h *Syncer) processEvent(ctx context.Context, event Message, undoFunc UndoF
 		h.Logger.Warn().Str("blockHash", hex.EncodeToString(event.Advance.Hash)).Err(res.err).Msg("Failed downloading advance block")
 		return fmt.Errorf("download advance block %s: %w", hex.EncodeToString(event.Advance.Hash), res.err)
 	}
-	blockType := uint(res.bytes[1])
-	block, err := ledger.NewBlockFromCbor(blockType, res.bytes[2:], skipBodyHashCfg)
+	block, err := decodeBlock(res.bytes)
 	if err != nil {
 		h.Logger.Warn().Str("blockHash", hex.EncodeToString(event.Advance.Hash)).Err(err).Msg("Error decoding block for advance")
 		return err
