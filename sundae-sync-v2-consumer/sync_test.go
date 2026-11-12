@@ -95,3 +95,46 @@ func fillHeaderPlaceholders(h *dijkstra.DijkstraBlockHeader) {
 	h.Body.OpCert.HotVkey = make([]byte, 32)
 	h.Body.OpCert.Signature = make([]byte, 64)
 }
+
+// TestDecodeBlockSkipsBodyHash guards against the RunOne regression: a block
+// whose header body hash doesn't match its body (as with Dolos-served blocks,
+// which keep the original header but inline EB transactions) must still
+// decode through decodeBlock.
+func TestDecodeBlockSkipsBodyHash(t *testing.T) {
+	tx := loadMusashiTransaction(t)
+	block := &dijkstra.DijkstraBlock{
+		BlockHeader: &dijkstra.DijkstraBlockHeader{},
+		BlockBody: dijkstra.DijkstraBlockBody{
+			Transactions: []dijkstra.DijkstraTransaction{*tx},
+		},
+	}
+	// Placeholder header: its body hash is zeroed, so it can't match the body.
+	fillHeaderPlaceholders(block.BlockHeader)
+	raw, err := cbor.Encode([]any{dijkstra.BlockTypeDijkstra, block})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Precondition: strict decoding rejects this block, so the test really
+	// exercises the body-hash mismatch path.
+	if _, err := ledger.NewBlockFromCbor(uint(raw[1]), raw[2:]); err == nil {
+		t.Fatal("expected strict decode to fail on mismatched body hash")
+	}
+
+	decoded, err := decodeBlock(raw)
+	if err != nil {
+		t.Fatalf("decodeBlock: %v", err)
+	}
+	txs := decoded.Transactions()
+	if len(txs) != 1 || txs[0].Hash().String() != musashiTxID {
+		t.Fatalf("unexpected transactions after decode: %d", len(txs))
+	}
+}
+
+func TestDecodeBlockRejectsShortPayload(t *testing.T) {
+	for _, raw := range [][]byte{nil, {0x82}} {
+		if _, err := decodeBlock(raw); err == nil {
+			t.Errorf("decodeBlock(%x): expected error, got nil", raw)
+		}
+	}
+}
