@@ -40,10 +40,10 @@ import (
 )
 
 // skipBodyHashCfg disables gouroboros body-hash validation when parsing
-// archived blocks. Many Conway-era blocks fail body_hash verification because
-// gouroboros's tx re-encoding doesn't byte-equal the original CBOR; the block
-// content itself is intact (header hash matches, all txs decode). The same
-// flag is applied in the live consumer (sync.go) for the same reason.
+// archived blocks. Dolos-served blocks can never pass it (the original header
+// is kept while EB transactions are inlined into the body), and some Conway
+// blocks fail due to gouroboros encoding bugs. See skipBodyHashCfg in the
+// parent package's sync.go for the full rationale; keep the two in sync.
 var skipBodyHashCfg = common.VerifyConfig{SkipBodyHashValidation: true}
 
 // AdvanceFunc is called once per top-level transaction during replay.

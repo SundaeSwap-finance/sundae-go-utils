@@ -18,7 +18,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
-	"github.com/blinklabs-io/gouroboros/ledger"
 	consumer "github.com/harlow/kinesis-consumer"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
@@ -254,8 +253,7 @@ func (h *SyncV2Consumer) RunOne(c *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to download block: %w", err)
 	}
-	blockType := uint(blockContents[1])
-	block, err := ledger.NewBlockFromCbor(blockType, blockContents[2:])
+	block, err := decodeBlock(blockContents)
 	if err != nil {
 		return fmt.Errorf("failed to parse block: %w", err)
 	}
