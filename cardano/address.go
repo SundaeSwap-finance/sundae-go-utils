@@ -74,21 +74,21 @@ func HasNoStakeAddress(address string) (bool, error) {
 	return hasNoStakeAddress(bytes), nil
 }
 
-// EnvToNetworkID returns the CIP-19 network ID for the named env (0 for
-// preview / preprod / any other testnet, 1 for mainnet). Mirrors
-// EnvToSlotOffset's env handling so address-builders can stay env-driven
-// like time helpers.
+// EnvToNetworkID returns the CIP-19 network ID for the named env: 1 for
+// mainnet, 0 for every other env, all of which are testnets. An empty env
+// means the one this process runs in.
+//
+// The error is always nil; the signature keeps it so callers that check it
+// still compile.
 func EnvToNetworkID(env string) (byte, error) {
 	if env == "" {
 		env = sundaecli.CommonOpts.Env
 	}
 	switch env {
-	case "preview", "preprod":
-		return 0, nil
 	case "mainnet", "cardano-tom":
 		return 1, nil
 	default:
-		return 0, fmt.Errorf("unrecognized environment %v", env)
+		return 0, nil
 	}
 }
 

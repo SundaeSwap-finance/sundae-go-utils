@@ -3,6 +3,7 @@ package cardano
 import (
 	"testing"
 
+	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
 	"github.com/tj/assert"
 )
 
@@ -37,4 +38,32 @@ func Test_SplitAddress(t *testing.T) {
 	assert.Nil(t, err)
 	assert.True(t, b)
 
+}
+
+func Test_EnvToNetworkID(t *testing.T) {
+	previous := sundaecli.CommonOpts.Env
+	t.Cleanup(func() { sundaecli.CommonOpts.Env = previous })
+
+	tests := []struct {
+		name       string
+		env        string
+		defaultEnv string
+		want       byte
+	}{
+		{name: "mainnet", env: "mainnet", want: 1},
+		{name: "cardano-tom", env: "cardano-tom", want: 1},
+		{name: "preview", env: "preview", want: 0},
+		{name: "preprod", env: "preprod", want: 0},
+		{name: "testnet without a named case", env: "musashi", want: 0},
+		{name: "empty env falls back to the process env", defaultEnv: "mainnet", want: 1},
+		{name: "empty env on a testnet process", defaultEnv: "musashi", want: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sundaecli.CommonOpts.Env = tt.defaultEnv
+			got, err := EnvToNetworkID(tt.env)
+			assert.Nil(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
