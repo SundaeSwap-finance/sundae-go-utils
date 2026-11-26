@@ -6,13 +6,13 @@ import (
 	"net/http"
 	"strings"
 
+	sundaeapigateway "github.com/SundaeSwap-finance/sundae-go-utils/sundae-apigateway"
 	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/rs/zerolog"
-	"github.com/savaki/apigateway"
 )
 
 func Middlewares(service sundaecli.Service, routes chi.Router) chi.Router {
@@ -34,7 +34,7 @@ func Webserver(service sundaecli.Service, routes chi.Router) error {
 		return http.ListenAndServe(addr, routes)
 	}
 
-	lambda.Start(apigateway.Wrap(routes, sundaecli.CommonOpts.Env))
+	lambda.Start(sundaeapigateway.Wrap(routes, sundaecli.CommonOpts.Env))
 	return nil
 }
 

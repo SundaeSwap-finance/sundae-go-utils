@@ -183,6 +183,15 @@ callback: local completion is recorded only after that callback returns.
 
 REST API utilities with CORS support and common middleware.
 
+### sundae-apigateway
+
+`Wrap` adapts an `http.Handler` to an API Gateway Lambda event, like
+`savaki/apigateway.Wrap`. It also replaces `X-Forwarded-For` with API Gateway's
+`requestContext.http.sourceIp`, because behind an HTTP API the caller controls
+that header. The caller's own value moves to `x-sundae-caller-forwarded-for`,
+for forensics only. `sundae-rest` and `sundae-gql` use it; a service that calls
+`lambda.Start(apigateway.Wrap(...))` itself should call `sundaeapigateway.Wrap`.
+
 ### sundae-secret
 
 AWS Secrets Manager integration for loading configuration secrets.

@@ -7,13 +7,13 @@ import (
 	"github.com/SundaeSwap-finance/sundae-go-utils/graphiql"
 	sundaecli "github.com/SundaeSwap-finance/sundae-go-utils/sundae-cli"
 
+	sundaeapigateway "github.com/SundaeSwap-finance/sundae-go-utils/sundae-apigateway"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/graph-gophers/graphql-go"
 	"github.com/graph-gophers/graphql-go/relay"
 	"github.com/rs/zerolog"
-	"github.com/savaki/apigateway"
 )
 
 // Serve a mildly opinionated graphql webserver, optionally with playground attached
@@ -94,6 +94,6 @@ func Serve(router chi.Router, config *BaseConfig) error {
 	}
 
 	config.Logger.Info().Str("env", sundaecli.CommonOpts.Env).Msgf("starting %v", config.Service.Name)
-	lambda.Start(apigateway.Wrap(router, sundaecli.CommonOpts.Env, config.Service.Subpath))
+	lambda.Start(sundaeapigateway.Wrap(router, sundaecli.CommonOpts.Env, config.Service.Subpath))
 	return nil
 }

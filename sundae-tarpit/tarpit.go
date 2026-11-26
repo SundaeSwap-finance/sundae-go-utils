@@ -144,12 +144,13 @@ func Middleware(src Source, cfg Config) func(http.Handler) http.Handler {
 
 // ClientIP returns the caller address with no port.
 //
-// Behind API Gateway the request carries X-Forwarded-For. A caller can send its
-// own X-Forwarded-For, and API Gateway keeps those entries and appends the real
-// TCP source as the last entry. So the last entry is the trusted client
-// address, and any earlier entries are caller-controlled. Taking the last entry
-// stops a caller from evading an IP match by prepending a forged address. This
-// assumes one trusted proxy hop (API Gateway) in front of the service.
+// The address comes from X-Forwarded-For, and this function trusts that
+// header. Behind an API Gateway HTTP API the caller controls it completely, so
+// the service must overwrite it with requestContext.http.sourceIp before this
+// middleware runs. sundae-rest and sundae-gql do this through
+// sundaeapigateway.Wrap; a service that calls apigateway.Wrap directly must
+// use sundaeapigateway.Wrap instead. The last entry is taken, which still
+// resists a forged prefix behind a proxy that appends the real source.
 //
 // With no header, RemoteAddr is used, which covers local serving.
 func ClientIP(r *http.Request) string {
